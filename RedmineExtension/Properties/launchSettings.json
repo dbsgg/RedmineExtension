@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "RedmineExtension (Package)": {
+      "commandName": "MsixPackage",
+      "doNotLaunchApp": true
+    },
+    "RedmineExtension (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

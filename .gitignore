@@ -1,0 +1,36 @@
+# Visual Studio / .NET
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.suo
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+[Bb]uild/
+[Pp]ublish/
+*.binlog
+
+# NuGet
+*.nupkg
+packages/
+.nuget/
+
+# Rider
+.idea/
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Secrets / local config (Redmine URL, API keys, etc.)
+appsettings.*.json
+secrets.json
+*.local.json
+.env
