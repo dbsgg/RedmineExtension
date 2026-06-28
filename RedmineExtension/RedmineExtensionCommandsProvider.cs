@@ -4,19 +4,25 @@
 
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using RedmineExtension.Pages;
 
 namespace RedmineExtension;
 
 public partial class RedmineExtensionCommandsProvider : CommandProvider
 {
+
     private readonly ICommandItem[] _commands;
 
     public RedmineExtensionCommandsProvider()
     {
         DisplayName = "Redmine";
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
+
+        var settings = new RedmineCommandSettings();
+        Settings = settings;
+
         _commands = [
-            new CommandItem(new RedmineExtensionPage()) { Title = DisplayName },
+            new CommandItem(new RedmineExtensionPage(settings)) { Title = DisplayName },
         ];
     }
 

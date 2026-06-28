@@ -4,22 +4,28 @@
 
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using RedmineExtension.Pages;
 
 namespace RedmineExtension;
 
 internal sealed partial class RedmineExtensionPage : ListPage
 {
-    public RedmineExtensionPage()
+    private readonly RedmineCommandSettings _settings;
+
+    public RedmineExtensionPage(RedmineCommandSettings settings)
     {
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
         Title = "Redmine";
         Name = "Open";
+
+        _settings = settings;
     }
 
     public override IListItem[] GetItems()
     {
         return [
-            new ListItem(new NoOpCommand()) { Title = "TODO: Implement your extension here" }
+            new ListItem(new OpenUrlCommand(_settings.ServerUrl)) { Title = "Redmineを開く" },
         ];
+        
     }
 }
