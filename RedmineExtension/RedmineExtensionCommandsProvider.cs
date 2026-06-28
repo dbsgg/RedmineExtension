@@ -16,7 +16,7 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
     public RedmineExtensionCommandsProvider()
     {
         DisplayName = "Redmine";
-        Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
+        Icon = new IconInfo("");
 
         var settings = new RedmineCommandSettings();
         Settings = settings;
