@@ -52,6 +52,12 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
 
     private IListItem[] BuildItems(string search)
     {
+        // URL / API キーが未設定なら、まず設定ページへ誘導する。
+        if (!_api.IsConfigured)
+        {
+            return [BuildSettingsPrompt()];
+        }
+
         var raw = search ?? string.Empty;
         var body = raw.TrimStart();
         if (body.StartsWith('#'))
@@ -203,5 +209,14 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
             RequestedShortcut = KeyChordHelpers.FromModifiers(
                 ctrl: true, alt: false, shift: false, win: false,
                 vkey: VirtualKey.Enter, scanCode: 0),
+        };
+
+    // 未設定時に設定ページへ誘導する項目。Enter で設定を開く。
+    private ListItem BuildSettingsPrompt() =>
+        new ListItem(_settings.SettingsPage)
+        {
+            Title = "Redmine の設定が必要です",
+            Subtitle = "Enter で設定を開き、URL と API キーを入力してください",
+            Icon = new IconInfo(""), // glyph:E713
         };
 }

@@ -57,6 +57,9 @@ internal sealed class SettingsManager
     /// <summary>CommandProvider の Settings に渡す。設定ページは自動生成される。</summary>
     public ICommandSettings Settings => _settings;
 
+    /// <summary>自動生成された設定ページ。未設定時の誘導などからナビゲートに使う。</summary>
+    public IContentPage SettingsPage => _settings.SettingsPage;
+
     public string ServerUrl =>
         (_settings.GetSetting<string>(ServerUrlKey) ?? string.Empty).Trim().TrimEnd('/');
 
