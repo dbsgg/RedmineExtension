@@ -1,0 +1,129 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.CommandPalette.Extensions;
+using Microsoft.CommandPalette.Extensions.Toolkit;
+using Windows.System;
+
+namespace RedmineExtension;
+
+/// <summary>
+/// 保存済みカスタム検索の結果ページ。
+/// 一覧モード: フィルタ結果を並べ、ホスト標準のクエリ絞り込み(ファジー)で検索する。
+/// 件数モード: total_count を「○件」と表示し、クリックで Redmine の該当一覧を開く。
+/// </summary>
+internal sealed partial class CustomSearchPage : ListPage
+{
+    private readonly SavedSearch _search;
+    private readonly RedmineApi _api;
+    private readonly TicketHistory _history;
+
+    private IListItem[] _items;
+    private bool _started;
+
+    public CustomSearchPage(SavedSearch search, RedmineApi api, TicketHistory history)
+    {
+        _search = search;
+        _api = api;
+        _history = history;
+
+        Title = search.Name;
+        Name = "Open";
+        Icon = new IconInfo(""); // glyph:E71C
+        PlaceholderText = search.Mode == "count" ? string.Empty : "クエリでファジー絞り込み";
+
+        _items = [new ListItem(new NoOpCommand()) { Title = "読み込み中…" }];
+    }
+
+    public override IListItem[] GetItems()
+    {
+        // ページが開かれた初回だけ取得する(top-level 構築時には走らせない)。
+        if (!_started)
+        {
+            _started = true;
+            _ = LoadAsync();
+        }
+
+        return _items;
+    }
+
+    private async Task LoadAsync()
+    {
+        if (!_api.IsConfigured)
+        {
+            _items = [new ListItem(new NoOpCommand()) { Title = "設定で Redmine URL と API キーを入力してください。" }];
+            RaiseItemsChanged();
+            return;
+        }
+
+        try
+        {
+            _items = _search.Mode == "count"
+                ? await BuildCountAsync().ConfigureAwait(false)
+                : await BuildListAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _items = [
+                new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_search)))
+                {
+                    Title = $"取得に失敗: {ex.Message}",
+                    Subtitle = "Redmine で開く",
+                },
+            ];
+        }
+
+        RaiseItemsChanged();
+    }
+
+    private async Task<IListItem[]> BuildCountAsync()
+    {
+        var (_, total) = await _api.SearchIssuesAsync(_search, 1).ConfigureAwait(false);
+        return [
+            new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_search)))
+            {
+                Title = $"{_search.Name}: {total} 件",
+                Subtitle = "Redmine で一覧を開く",
+                Icon = new IconInfo(""), // glyph:E8EC
+            },
+        ];
+    }
+
+    private async Task<IListItem[]> BuildListAsync()
+    {
+        var (issues, _) = await _api.SearchIssuesAsync(_search, 100).ConfigureAwait(false);
+        if (issues.Count == 0)
+        {
+            return [
+                new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_search)))
+                {
+                    Title = "該当チケットなし",
+                    Subtitle = "Redmine で開く",
+                },
+            ];
+        }
+
+        return issues.Select(BuildIssueItem).ToArray();
+    }
+
+    private IListItem BuildIssueItem(IssueSummary issue)
+    {
+        var url = _api.IssueUrl(issue.Id);
+        var subject = issue.Subject;
+
+        return new ListItem(new OpenTicketCommand(url, issue.Id, () => subject, _history))
+        {
+            Title = $"#{issue.Id} {subject}",
+            Subtitle = url,
+            Icon = new IconInfo(""), // glyph:E774
+            MoreCommands = [
+                new CommandContextItem(new CopyTicketLinkCommand(_api, issue.Id, _history))
+                {
+                    RequestedShortcut = KeyChordHelpers.FromModifiers(
+                        ctrl: true, alt: false, shift: false, win: false,
+                        vkey: VirtualKey.Enter, scanCode: 0),
+                },
+            ],
+        };
+    }
+}

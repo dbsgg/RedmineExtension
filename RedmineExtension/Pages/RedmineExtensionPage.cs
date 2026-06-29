@@ -30,7 +30,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
 
     private string _search = string.Empty;
 
-    public RedmineExtensionPage(SettingsManager settings)
+    public RedmineExtensionPage(SettingsManager settings, RedmineApi api, TicketHistory history)
     {
         Icon = new IconInfo("");
         Title = "Redmine";
@@ -38,8 +38,8 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
         PlaceholderText = "チケット番号を入力（番号の後にスペースでタイトル表示）";
 
         _settings = settings;
-        _api = new RedmineApi(settings);
-        _history = new TicketHistory(settings.MaxHistoryRetained);
+        _api = api;
+        _history = history;
     }
 
     public override void UpdateSearchText(string oldSearch, string newSearch)
