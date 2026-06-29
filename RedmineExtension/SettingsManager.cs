@@ -26,7 +26,7 @@ internal sealed class SettingsManager
 
     public SettingsManager()
     {
-        _settings.Add(new TextSetting(ServerUrlKey, "http://localhost:8080")
+        _settings.Add(new TextSetting(ServerUrlKey, string.Empty)
         {
             Label = "Redmine URL",
             Description = "例: http://redmine/example",
