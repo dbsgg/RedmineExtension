@@ -4,7 +4,6 @@
 
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
-using RedmineExtension.Pages;
 
 namespace RedmineExtension;
 
@@ -18,8 +17,8 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
         DisplayName = "Redmine";
         Icon = new IconInfo("");
 
-        var settings = new RedmineCommandSettings();
-        Settings = settings;
+        var settings = new SettingsManager();
+        Settings = settings.Settings;
 
         _commands = [
             new CommandItem(new RedmineExtensionPage(settings)) { Title = DisplayName },

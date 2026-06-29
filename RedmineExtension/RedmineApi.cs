@@ -7,16 +7,16 @@ namespace RedmineExtension;
 
 /// <summary>
 /// Redmine REST API への最小限のアクセス。チケットのタイトル(subject)取得に使う。
-/// API キー・サーバー URL は <see cref="RedmineCommandSettings"/>(実行時入力)から取得し、
+/// API キー・サーバー URL は <see cref="SettingsManager"/>(実行時入力)から取得し、
 /// ソースには直書きしない。
 /// </summary>
 internal sealed class RedmineApi
 {
     private static readonly HttpClient Http = CreateClient();
 
-    private readonly RedmineCommandSettings _settings;
+    private readonly SettingsManager _settings;
 
-    public RedmineApi(RedmineCommandSettings settings) => _settings = settings;
+    public RedmineApi(SettingsManager settings) => _settings = settings;
 
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(_settings.ServerUrl) &&

@@ -4,6 +4,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -13,9 +14,9 @@ namespace RedmineExtension;
 
 internal sealed partial class RedmineExtensionPage : DynamicListPage
 {
-    private readonly RedmineCommandSettings _settings;
+    private readonly SettingsManager _settings;
     private readonly RedmineApi _api;
-    private readonly TicketHistory _history = new();
+    private readonly TicketHistory _history;
 
     // チケット項目は id 単位でキャッシュし、取得完了時に Title を更新する。
     private readonly ConcurrentDictionary<int, ListItem> _ticketItems = new();
@@ -29,7 +30,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
 
     private string _search = string.Empty;
 
-    public RedmineExtensionPage(RedmineCommandSettings settings)
+    public RedmineExtensionPage(SettingsManager settings)
     {
         Icon = new IconInfo("");
         Title = "Redmine";
@@ -38,6 +39,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
 
         _settings = settings;
         _api = new RedmineApi(settings);
+        _history = new TicketHistory(settings.MaxHistoryRetained);
     }
 
     public override void UpdateSearchText(string oldSearch, string newSearch)
@@ -160,10 +162,10 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
     {
         var items = new List<IListItem>();
 
-        // 検索ボックスが空のときだけ直近の履歴を表示する。
+        // 検索ボックスが空のときだけ直近の履歴を設定件数まで表示する。
         if (string.IsNullOrWhiteSpace(raw))
         {
-            foreach (var entry in _history.Recent)
+            foreach (var entry in _history.Recent.Take(_settings.HistoryCount))
             {
                 items.Add(HistoryItem(entry));
             }

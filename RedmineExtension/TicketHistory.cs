@@ -29,14 +29,15 @@ internal sealed partial class HistoryJsonContext : JsonSerializerContext
 /// </summary>
 internal sealed class TicketHistory
 {
-    private const int MaxEntries = 10;
-
+    private readonly int _maxEntries;
     private readonly object _lock = new();
     private readonly string? _filePath;
     private readonly List<TicketHistoryEntry> _entries;
 
-    public TicketHistory()
+    /// <param name="maxEntries">保持する最大件数。表示件数より多めに保持しておく。</param>
+    public TicketHistory(int maxEntries)
     {
+        _maxEntries = maxEntries;
         _filePath = TryGetFilePath();
         _entries = Load();
     }
@@ -72,9 +73,9 @@ internal sealed class TicketHistory
                 LastUsedUtc = DateTime.UtcNow,
             });
 
-            if (_entries.Count > MaxEntries)
+            if (_entries.Count > _maxEntries)
             {
-                _entries.RemoveRange(MaxEntries, _entries.Count - MaxEntries);
+                _entries.RemoveRange(_maxEntries, _entries.Count - _maxEntries);
             }
 
             Save();
@@ -91,7 +92,7 @@ internal sealed class TicketHistory
                 var list = JsonSerializer.Deserialize(stream, HistoryJsonContext.Default.ListTicketHistoryEntry);
                 if (list is not null)
                 {
-                    return list.Take(MaxEntries).ToList();
+                    return list.Take(_maxEntries).ToList();
                 }
             }
         }
