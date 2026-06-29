@@ -24,8 +24,8 @@ namespace RedmineExtension.Pages
                 "http://localhost:8080")
             {
                 Label = "Redmine URL",
-                Description = "例: http://localhost:8080",
-                Placeholder = "http://localhost:8080",
+                Description = "例: http://redmine/example",
+                Placeholder = "http://redmine/example",
                 IsRequired = true,
             });
 
