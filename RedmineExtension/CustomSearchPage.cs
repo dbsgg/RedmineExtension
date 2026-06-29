@@ -18,8 +18,12 @@ internal sealed partial class CustomSearchPage : ListPage
     private readonly RedmineApi _api;
     private readonly TicketHistory _history;
 
+    // 連続呼び出しでの多重取得は防ぎつつ、開く度に最新を反映するための間隔。
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
+
     private IListItem[] _items;
-    private bool _started;
+    private DateTime _loadedAtUtc = DateTime.MinValue;
+    private bool _loading;
 
     public CustomSearchPage(SavedSearch search, RedmineApi api, TicketHistory history)
     {
@@ -37,10 +41,11 @@ internal sealed partial class CustomSearchPage : ListPage
 
     public override IListItem[] GetItems()
     {
-        // ページが開かれた初回だけ取得する(top-level 構築時には走らせない)。
-        if (!_started)
+        // ページを開く度に(古ければ)再取得し、チケットの変更を反映する。
+        // GetItems は表示時に呼ばれ、キーストローク毎の絞り込みはホスト側で行われる。
+        if (!_loading && DateTime.UtcNow - _loadedAtUtc > RefreshInterval)
         {
-            _started = true;
+            _loading = true;
             _ = LoadAsync();
         }
 
@@ -49,15 +54,14 @@ internal sealed partial class CustomSearchPage : ListPage
 
     private async Task LoadAsync()
     {
-        if (!_api.IsConfigured)
-        {
-            _items = [new ListItem(new NoOpCommand()) { Title = "設定で Redmine URL と API キーを入力してください。" }];
-            RaiseItemsChanged();
-            return;
-        }
-
         try
         {
+            if (!_api.IsConfigured)
+            {
+                _items = [new ListItem(new NoOpCommand()) { Title = "設定で Redmine URL と API キーを入力してください。" }];
+                return;
+            }
+
             _items = _search.Mode == "count"
                 ? await BuildCountAsync().ConfigureAwait(false)
                 : await BuildListAsync().ConfigureAwait(false);
@@ -72,8 +76,12 @@ internal sealed partial class CustomSearchPage : ListPage
                 },
             ];
         }
-
-        RaiseItemsChanged();
+        finally
+        {
+            _loadedAtUtc = DateTime.UtcNow;
+            _loading = false;
+            RaiseItemsChanged();
+        }
     }
 
     private async Task<IListItem[]> BuildCountAsync()
