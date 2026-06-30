@@ -7,12 +7,35 @@ using System.Text.Json.Serialization;
 
 namespace RedmineExtension;
 
+/// <summary>フィルタ値（Redmine の id とその表示名）。</summary>
+internal sealed class FilterValue
+{
+    public string Value { get; set; } = string.Empty;
+
+    public string Name { get; set; } = string.Empty;
+}
+
 /// <summary>
-/// 保存されたカスタム検索。フィルタは Redmine /issues.json のパラメータに対応する。
-/// Status/Assignee は "open"/"closed"/"*"/数値 id /"me" などの生値を保持し、API にそのまま渡す。
-/// 表示名(*Name)も保存して再取得不要にする。秘密情報は含めない。
+/// 1 フィールド分のフィルタ条件。Op は Redmine の演算子:
+/// ""=未指定 / "="=いずれか(IN) / "!"=除外 / "o"=未完了 / "c"=完了 / "*"=すべて。
+/// Values は Op が "=" / "!" のときのみ使う。
 /// </summary>
-internal sealed class SavedSearch
+internal sealed class FilterCondition
+{
+    public string Op { get; set; } = string.Empty;
+
+    public List<FilterValue> Values { get; set; } = new();
+
+    public bool HasFilter => !string.IsNullOrEmpty(Op);
+
+    public bool UsesValues => Op is "=" or "!";
+}
+
+/// <summary>
+/// 保存クエリ。プロジェクト(単一)で絞り、トラッカー/ステータス/担当者を演算子＋複数値で指定する。
+/// 一覧モード(list)/件数モード(count)を持つ。秘密情報は含めない。
+/// </summary>
+internal sealed class SavedQuery
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
@@ -25,38 +48,30 @@ internal sealed class SavedSearch
 
     public string? ProjectName { get; set; }
 
-    public int? TrackerId { get; set; }
+    public FilterCondition Tracker { get; set; } = new();
 
-    public string? TrackerName { get; set; }
+    public FilterCondition Status { get; set; } = new() { Op = "o" };
 
-    /// <summary>status_id の生値("open"/"closed"/"*"/id)。</summary>
-    public string? Status { get; set; }
-
-    public string? StatusName { get; set; }
-
-    /// <summary>assigned_to_id の生値("me"/id)。</summary>
-    public string? Assignee { get; set; }
-
-    public string? AssigneeName { get; set; }
+    public FilterCondition Assignee { get; set; } = new();
 }
 
 // source-gen により反射なしで直列/逆直列化 → AOT/トリミング安全。
-[JsonSerializable(typeof(List<SavedSearch>))]
-internal sealed partial class SavedSearchJsonContext : JsonSerializerContext
+[JsonSerializable(typeof(List<SavedQuery>))]
+internal sealed partial class SavedQueryJsonContext : JsonSerializerContext
 {
 }
 
 /// <summary>
-/// カスタム検索の一覧を管理し、MSIX の LocalState に saved-searches.json として永続化する。
+/// 保存クエリの一覧を管理し、MSIX の LocalState に saved-queries.json として永続化する。
 /// 変更時に <see cref="Changed"/> を発火する(プロバイダが top-level を更新するため)。
 /// </summary>
-internal sealed class SavedSearchStore
+internal sealed class SavedQueryStore
 {
     private readonly object _lock = new();
     private readonly string? _filePath;
-    private readonly List<SavedSearch> _entries;
+    private readonly List<SavedQuery> _entries;
 
-    public SavedSearchStore()
+    public SavedQueryStore()
     {
         _filePath = TryGetFilePath();
         _entries = Load();
@@ -64,7 +79,7 @@ internal sealed class SavedSearchStore
 
     public event EventHandler? Changed;
 
-    public IReadOnlyList<SavedSearch> All
+    public IReadOnlyList<SavedQuery> All
     {
         get
         {
@@ -76,18 +91,18 @@ internal sealed class SavedSearchStore
     }
 
     /// <summary>新規追加(Id が既存なら置き換え)。</summary>
-    public void AddOrUpdate(SavedSearch search)
+    public void AddOrUpdate(SavedQuery query)
     {
         lock (_lock)
         {
-            var index = _entries.FindIndex(e => e.Id == search.Id);
+            var index = _entries.FindIndex(e => e.Id == query.Id);
             if (index >= 0)
             {
-                _entries[index] = search;
+                _entries[index] = query;
             }
             else
             {
-                _entries.Add(search);
+                _entries.Add(query);
             }
 
             Save();
@@ -107,22 +122,14 @@ internal sealed class SavedSearchStore
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public SavedSearch? Find(string id)
-    {
-        lock (_lock)
-        {
-            return _entries.FirstOrDefault(e => e.Id == id);
-        }
-    }
-
-    private List<SavedSearch> Load()
+    private List<SavedQuery> Load()
     {
         try
         {
             if (_filePath is not null && File.Exists(_filePath))
             {
                 using var stream = File.OpenRead(_filePath);
-                var list = JsonSerializer.Deserialize(stream, SavedSearchJsonContext.Default.ListSavedSearch);
+                var list = JsonSerializer.Deserialize(stream, SavedQueryJsonContext.Default.ListSavedQuery);
                 if (list is not null)
                 {
                     return list;
@@ -134,7 +141,7 @@ internal sealed class SavedSearchStore
             // 壊れたファイルは無視して空で始める。
         }
 
-        return new List<SavedSearch>();
+        return new List<SavedQuery>();
     }
 
     private void Save()
@@ -147,7 +154,7 @@ internal sealed class SavedSearchStore
         try
         {
             using var stream = File.Create(_filePath);
-            JsonSerializer.Serialize(stream, _entries, SavedSearchJsonContext.Default.ListSavedSearch);
+            JsonSerializer.Serialize(stream, _entries, SavedQueryJsonContext.Default.ListSavedQuery);
         }
         catch
         {
@@ -160,7 +167,7 @@ internal sealed class SavedSearchStore
         try
         {
             var dir = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
-            return Path.Combine(dir, "saved-searches.json");
+            return Path.Combine(dir, "saved-queries.json");
         }
         catch
         {

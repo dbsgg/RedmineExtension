@@ -68,10 +68,10 @@ internal sealed class RedmineApi
         return result;
     }
 
-    /// <summary>フィルタに合致するチケットを取得する。件数モード用に total_count も返す。</summary>
-    public async Task<(IReadOnlyList<IssueSummary> Issues, int TotalCount)> SearchIssuesAsync(SavedSearch filter, int limit)
+    /// <summary>クエリに合致するチケットを取得する。件数モード用に total_count も返す。</summary>
+    public async Task<(IReadOnlyList<IssueSummary> Issues, int TotalCount)> SearchIssuesAsync(SavedQuery query, int limit)
     {
-        var url = $"{_settings.ServerUrl}/issues.json?{BuildIssueQuery(filter)}&limit={limit}";
+        var url = $"{_settings.ServerUrl}/issues.json?{BuildIssueQuery(query)}&limit={limit}";
         using var doc = await GetAsync(url).ConfigureAwait(false);
 
         var total = doc.RootElement.TryGetProperty("total_count", out var tc) ? tc.GetInt32() : 0;
@@ -87,33 +87,49 @@ internal sealed class RedmineApi
     }
 
     /// <summary>件数モードのクリックで開く Redmine の Web 検索 URL。</summary>
-    public string IssuesWebUrl(SavedSearch filter) =>
-        $"{_settings.ServerUrl}/issues?set_filter=1&{BuildIssueQuery(filter)}";
+    public string IssuesWebUrl(SavedQuery query) =>
+        $"{_settings.ServerUrl}/issues?{BuildIssueQuery(query)}";
 
-    private static string BuildIssueQuery(SavedSearch f)
+    // Redmine の長形式フィルタ(set_filter=1 + f[]/op[]/v[])を組み立てる。
+    private static string BuildIssueQuery(SavedQuery q)
     {
-        var parts = new List<string>();
-        if (f.ProjectId is int p)
+        var parts = new List<string> { "set_filter=1" };
+
+        if (q.ProjectId is int projectId)
         {
-            parts.Add($"project_id={p}");
+            parts.Add($"project_id={projectId}");
         }
 
-        if (f.TrackerId is int t)
-        {
-            parts.Add($"tracker_id={t}");
-        }
-
-        if (!string.IsNullOrEmpty(f.Status))
-        {
-            parts.Add($"status_id={Uri.EscapeDataString(f.Status)}");
-        }
-
-        if (!string.IsNullOrEmpty(f.Assignee))
-        {
-            parts.Add($"assigned_to_id={Uri.EscapeDataString(f.Assignee)}");
-        }
+        AppendCondition(parts, "tracker_id", q.Tracker);
+        AppendCondition(parts, "status_id", q.Status);
+        AppendCondition(parts, "assigned_to_id", q.Assignee);
 
         return string.Join("&", parts);
+    }
+
+    private static void AppendCondition(List<string> parts, string field, FilterCondition condition)
+    {
+        if (condition is null || !condition.HasFilter)
+        {
+            return;
+        }
+
+        // "=" / "!" は値が必要。値が無ければ条件を付けない。
+        if (condition.UsesValues && condition.Values.Count == 0)
+        {
+            return;
+        }
+
+        parts.Add($"f[]={field}");
+        parts.Add($"op[{field}]={Uri.EscapeDataString(condition.Op)}");
+
+        if (condition.UsesValues)
+        {
+            foreach (var value in condition.Values)
+            {
+                parts.Add($"v[{field}][]={Uri.EscapeDataString(value.Value)}");
+            }
+        }
     }
 
     private async Task<IReadOnlyList<RedmineRef>> GetRefsAsync(string url, string arrayName)

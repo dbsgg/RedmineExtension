@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
@@ -13,7 +14,7 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
     private readonly SettingsManager _settings;
     private readonly RedmineApi _api;
     private readonly TicketHistory _history;
-    private readonly SavedSearchStore _store;
+    private readonly SavedQueryStore _store;
 
     public RedmineExtensionCommandsProvider()
     {
@@ -24,9 +25,9 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
         Settings = _settings.Settings;
         _api = new RedmineApi(_settings);
         _history = new TicketHistory(_settings.MaxHistoryRetained);
-        _store = new SavedSearchStore();
+        _store = new SavedQueryStore();
 
-        // カスタム検索の追加/編集/削除で top-level を更新する。
+        // 保存クエリの追加/編集/削除で top-level を更新する。
         _store.Changed += (_, _) => RaiseItemsChanged();
     }
 
@@ -37,39 +38,39 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
             new CommandItem(new RedmineExtensionPage(_settings, _api, _history)) { Title = DisplayName },
         };
 
-        foreach (var search in _store.All)
+        foreach (var query in _store.All)
         {
-            commands.Add(BuildSavedSearchCommand(search));
+            commands.Add(BuildSavedQueryCommand(query));
         }
 
-        commands.Add(new CommandItem(new AddCustomSearchProjectPage(_api, _store))
+        commands.Add(new CommandItem(new SavedQueryProjectPage(_api, _store))
         {
-            Title = "カスタム検索を追加",
+            Title = "保存クエリを追加",
             Icon = new IconInfo(""), // glyph:E710
         });
 
         return commands.ToArray();
     }
 
-    private CommandItem BuildSavedSearchCommand(SavedSearch search)
+    private CommandItem BuildSavedQueryCommand(SavedQuery query)
     {
-        var editPage = new CustomSearchFormPage(
-            search.ProjectId is int pid ? new RedmineRef(pid, search.ProjectName ?? string.Empty) : null,
+        var editPage = new SavedQueryFormPage(
+            query.ProjectId is int pid ? new RedmineRef(pid, query.ProjectName ?? string.Empty) : null,
             _api,
             _store,
-            search);
+            query);
 
-        var deleteCommand = new AnonymousCommand(() => _store.Remove(search.Id))
+        var deleteCommand = new AnonymousCommand(() => _store.Remove(query.Id))
         {
             Name = "削除",
             Icon = new IconInfo(""), // glyph:E74D
             Result = CommandResult.GoHome(),
         };
 
-        return new CommandItem(new CustomSearchPage(search, _api, _history))
+        return new CommandItem(new SavedQueryPage(query, _api, _history))
         {
-            Title = search.Name,
-            Subtitle = Describe(search),
+            Title = query.Name,
+            Subtitle = Describe(query),
             Icon = new IconInfo(""), // glyph:E71C
             MoreCommands = [
                 new CommandContextItem(editPage) { Title = "編集" },
@@ -78,30 +79,43 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
         };
     }
 
-    private static string Describe(SavedSearch search)
+    private static string Describe(SavedQuery query)
     {
         var parts = new List<string>();
-        if (!string.IsNullOrEmpty(search.ProjectName))
+        if (!string.IsNullOrEmpty(query.ProjectName))
         {
-            parts.Add(search.ProjectName);
+            parts.Add(query.ProjectName);
         }
 
-        if (!string.IsNullOrEmpty(search.TrackerName))
-        {
-            parts.Add(search.TrackerName);
-        }
-
-        if (!string.IsNullOrEmpty(search.StatusName))
-        {
-            parts.Add(search.StatusName);
-        }
-
-        if (!string.IsNullOrEmpty(search.AssigneeName))
-        {
-            parts.Add(search.AssigneeName);
-        }
+        AddCondition(parts, "トラッカー", query.Tracker);
+        AddCondition(parts, "ステータス", query.Status);
+        AddCondition(parts, "担当者", query.Assignee);
 
         var label = parts.Count > 0 ? string.Join(" / ", parts) : "条件なし";
-        return search.Mode == "count" ? $"件数 — {label}" : label;
+        return query.Mode == "count" ? $"件数 — {label}" : label;
+    }
+
+    private static void AddCondition(List<string> parts, string label, FilterCondition condition)
+    {
+        if (condition is null || !condition.HasFilter)
+        {
+            return;
+        }
+
+        var names = string.Join(",", condition.Values.Select(v => v.Name));
+        var text = condition.Op switch
+        {
+            "o" => $"{label}:未完了",
+            "c" => $"{label}:完了",
+            "*" => $"{label}:すべて",
+            "=" => $"{label}:{names}",
+            "!" => $"{label}≠{names}",
+            _ => null,
+        };
+
+        if (!string.IsNullOrEmpty(text))
+        {
+            parts.Add(text);
+        }
     }
 }

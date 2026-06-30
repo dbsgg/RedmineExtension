@@ -8,33 +8,33 @@ using Windows.System;
 namespace RedmineExtension;
 
 /// <summary>
-/// 保存済みカスタム検索の結果ページ。
+/// 保存クエリの結果ページ。
 /// 一覧モード: フィルタ結果を並べ、ホスト標準のクエリ絞り込み(ファジー)で検索する。
 /// 件数モード: total_count を「○件」と表示し、クリックで Redmine の該当一覧を開く。
 /// </summary>
-internal sealed partial class CustomSearchPage : ListPage
+internal sealed partial class SavedQueryPage : ListPage
 {
-    private readonly SavedSearch _search;
-    private readonly RedmineApi _api;
-    private readonly TicketHistory _history;
-
     // 連続呼び出しでの多重取得は防ぎつつ、開く度に最新を反映するための間隔。
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
+
+    private readonly SavedQuery _query;
+    private readonly RedmineApi _api;
+    private readonly TicketHistory _history;
 
     private IListItem[] _items;
     private DateTime _loadedAtUtc = DateTime.MinValue;
     private bool _loading;
 
-    public CustomSearchPage(SavedSearch search, RedmineApi api, TicketHistory history)
+    public SavedQueryPage(SavedQuery query, RedmineApi api, TicketHistory history)
     {
-        _search = search;
+        _query = query;
         _api = api;
         _history = history;
 
-        Title = search.Name;
+        Title = query.Name;
         Name = "Open";
         Icon = new IconInfo(""); // glyph:E71C
-        PlaceholderText = search.Mode == "count" ? string.Empty : "クエリでファジー絞り込み";
+        PlaceholderText = query.Mode == "count" ? string.Empty : "クエリでファジー絞り込み";
 
         _items = [new ListItem(new NoOpCommand()) { Title = "読み込み中…" }];
     }
@@ -42,7 +42,6 @@ internal sealed partial class CustomSearchPage : ListPage
     public override IListItem[] GetItems()
     {
         // ページを開く度に(古ければ)再取得し、チケットの変更を反映する。
-        // GetItems は表示時に呼ばれ、キーストローク毎の絞り込みはホスト側で行われる。
         if (!_loading && DateTime.UtcNow - _loadedAtUtc > RefreshInterval)
         {
             _loading = true;
@@ -62,14 +61,14 @@ internal sealed partial class CustomSearchPage : ListPage
                 return;
             }
 
-            _items = _search.Mode == "count"
+            _items = _query.Mode == "count"
                 ? await BuildCountAsync().ConfigureAwait(false)
                 : await BuildListAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _items = [
-                new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_search)))
+                new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)))
                 {
                     Title = $"取得に失敗: {ex.Message}",
                     Subtitle = "Redmine で開く",
@@ -86,11 +85,11 @@ internal sealed partial class CustomSearchPage : ListPage
 
     private async Task<IListItem[]> BuildCountAsync()
     {
-        var (_, total) = await _api.SearchIssuesAsync(_search, 1).ConfigureAwait(false);
+        var (_, total) = await _api.SearchIssuesAsync(_query, 1).ConfigureAwait(false);
         return [
-            new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_search)))
+            new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)))
             {
-                Title = $"{_search.Name}: {total} 件",
+                Title = $"{_query.Name}: {total} 件",
                 Subtitle = "Redmine で一覧を開く",
                 Icon = new IconInfo(""), // glyph:E8EC
             },
@@ -99,11 +98,11 @@ internal sealed partial class CustomSearchPage : ListPage
 
     private async Task<IListItem[]> BuildListAsync()
     {
-        var (issues, _) = await _api.SearchIssuesAsync(_search, 100).ConfigureAwait(false);
+        var (issues, _) = await _api.SearchIssuesAsync(_query, 100).ConfigureAwait(false);
         if (issues.Count == 0)
         {
             return [
-                new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_search)))
+                new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)))
                 {
                     Title = "該当チケットなし",
                     Subtitle = "Redmine で開く",
