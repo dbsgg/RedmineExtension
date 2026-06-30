@@ -43,7 +43,7 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
             commands.Add(BuildSavedQueryCommand(query));
         }
 
-        commands.Add(new CommandItem(new SavedQueryProjectPage(_api, _store))
+        commands.Add(new CommandItem(new SavedQueryFormPage(_store))
         {
             Title = "保存クエリを追加",
             Icon = new IconInfo(""), // glyph:E710
@@ -54,11 +54,7 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
 
     private CommandItem BuildSavedQueryCommand(SavedQuery query)
     {
-        var editPage = new SavedQueryFormPage(
-            query.ProjectId is int pid ? new RedmineRef(pid, query.ProjectName ?? string.Empty) : null,
-            _api,
-            _store,
-            query);
+        var editPage = new SavedQueryFormPage(_store, query);
 
         var deleteCommand = new AnonymousCommand(() => _store.Remove(query.Id))
         {

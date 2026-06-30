@@ -53,6 +53,12 @@ internal sealed class SavedQuery
     public FilterCondition Status { get; set; } = new() { Op = "o" };
 
     public FilterCondition Assignee { get; set; } = new();
+
+    /// <summary>
+    /// 貼り付けられた生クエリ（query_id=NN / "status_id=open&..." / 完全な URL）。
+    /// 値があればこちらを優先し、フィールド条件は使わない。API キーは含めない。
+    /// </summary>
+    public string? RawQuery { get; set; }
 }
 
 // source-gen により反射なしで直列/逆直列化 → AOT/トリミング安全。

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -71,7 +72,7 @@ internal sealed class RedmineApi
     /// <summary>クエリに合致するチケットを取得する。件数モード用に total_count も返す。</summary>
     public async Task<(IReadOnlyList<IssueSummary> Issues, int TotalCount)> SearchIssuesAsync(SavedQuery query, int limit)
     {
-        var url = $"{_settings.ServerUrl}/issues.json?{BuildIssueQuery(query)}&limit={limit}";
+        var url = $"{_settings.ServerUrl}/issues.json?{EffectiveQuery(query)}&limit={limit}";
         using var doc = await GetAsync(url).ConfigureAwait(false);
 
         var total = doc.RootElement.TryGetProperty("total_count", out var tc) ? tc.GetInt32() : 0;
@@ -88,7 +89,38 @@ internal sealed class RedmineApi
 
     /// <summary>件数モードのクリックで開く Redmine の Web 検索 URL。</summary>
     public string IssuesWebUrl(SavedQuery query) =>
-        $"{_settings.ServerUrl}/issues?{BuildIssueQuery(query)}";
+        $"{_settings.ServerUrl}/issues?{EffectiveQuery(query)}";
+
+    // RawQuery があればそれを正規化して使い、無ければフィールド条件から組み立てる。
+    private static string EffectiveQuery(SavedQuery query) =>
+        string.IsNullOrWhiteSpace(query.RawQuery) ? BuildIssueQuery(query) : NormalizeRawQuery(query.RawQuery);
+
+    // 貼り付けられた query_id / クエリ文字列 / URL を Redmine 用クエリへ正規化する。
+    // API キー(key=)は資格情報マネージャから付与するため除去する。
+    private static string NormalizeRawQuery(string raw)
+    {
+        raw = raw.Trim();
+        if (raw.Length == 0)
+        {
+            return "set_filter=1";
+        }
+
+        // 数字のみなら保存クエリ ID とみなす。
+        if (raw.All(char.IsDigit))
+        {
+            return $"query_id={raw}";
+        }
+
+        // URL なら '?' 以降のクエリ部だけ使う。
+        var questionMark = raw.IndexOf('?');
+        var query = questionMark >= 0 ? raw[(questionMark + 1)..] : raw;
+
+        var parts = query
+            .Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(p => !p.StartsWith("key=", StringComparison.OrdinalIgnoreCase));
+
+        return string.Join("&", parts);
+    }
 
     // Redmine の長形式フィルタ(set_filter=1 + f[]/op[]/v[])を組み立てる。
     private static string BuildIssueQuery(SavedQuery q)
