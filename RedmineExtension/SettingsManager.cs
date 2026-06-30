@@ -57,6 +57,15 @@ internal sealed class SettingsManager
     /// <summary>CommandProvider の Settings に渡す。設定ページは自動生成される。</summary>
     public ICommandSettings Settings => _settings;
 
+    /// <summary>未設定時に設定ページへ誘導する一覧項目（Enter で設定を開く）。</summary>
+    public IListItem SettingsPrompt() =>
+        new ListItem(_settings.SettingsPage)
+        {
+            Title = "Redmine の設定が必要です",
+            Subtitle = "Enter で設定を開き、URL と API キーを入力してください",
+            Icon = new IconInfo(""), // glyph:E713
+        };
+
     /// <summary>自動生成された設定ページ。未設定時の誘導などからナビゲートに使う。</summary>
     public IContentPage SettingsPage => _settings.SettingsPage;
 

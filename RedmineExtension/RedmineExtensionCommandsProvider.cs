@@ -38,9 +38,22 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
             new CommandItem(new RedmineExtensionPage(_settings, _api, _history)) { Title = DisplayName },
         };
 
-        foreach (var query in _store.All)
+        var all = _store.All;
+
+        // 一覧モードは個別 top-level、件数モードは1つにまとめる。
+        foreach (var query in all.Where(q => q.Mode != "count"))
         {
             commands.Add(BuildSavedQueryCommand(query));
+        }
+
+        if (all.Any(q => q.Mode == "count"))
+        {
+            commands.Add(new CommandItem(new CountSummaryPage(_store, _api, _settings))
+            {
+                Title = "保存クエリ（件数）",
+                Subtitle = "件数モードの保存クエリ一覧",
+                Icon = new IconInfo(""), // glyph:E8EC
+            });
         }
 
         commands.Add(new CommandItem(new SavedQueryFormPage(_store))
@@ -63,7 +76,7 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
             Result = CommandResult.GoHome(),
         };
 
-        return new CommandItem(new SavedQueryPage(query, _api, _history))
+        return new CommandItem(new SavedQueryPage(query, _api, _history, _settings))
         {
             Title = query.Name,
             Subtitle = Describe(query),

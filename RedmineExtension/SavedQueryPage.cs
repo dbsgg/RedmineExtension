@@ -20,16 +20,18 @@ internal sealed partial class SavedQueryPage : ListPage
     private readonly SavedQuery _query;
     private readonly RedmineApi _api;
     private readonly TicketHistory _history;
+    private readonly SettingsManager _settings;
 
     private IListItem[] _items;
     private DateTime _loadedAtUtc = DateTime.MinValue;
     private bool _loading;
 
-    public SavedQueryPage(SavedQuery query, RedmineApi api, TicketHistory history)
+    public SavedQueryPage(SavedQuery query, RedmineApi api, TicketHistory history, SettingsManager settings)
     {
         _query = query;
         _api = api;
         _history = history;
+        _settings = settings;
 
         Title = query.Name;
         Name = "Open";
@@ -57,7 +59,7 @@ internal sealed partial class SavedQueryPage : ListPage
         {
             if (!_api.IsConfigured)
             {
-                _items = [new ListItem(new NoOpCommand()) { Title = "設定で Redmine URL と API キーを入力してください。" }];
+                _items = [_settings.SettingsPrompt()];
                 return;
             }
 
