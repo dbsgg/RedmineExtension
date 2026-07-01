@@ -7,7 +7,7 @@ using Microsoft.CommandPalette.Extensions.Toolkit;
 namespace RedmineExtension;
 
 /// <summary>
-/// 保存クエリの作成/編集フォーム（貼り付け方式）。名前・モードと、Redmine のクエリ
+/// 保存クエリの作成/編集フォーム（貼り付け方式）。名前と、Redmine のクエリ
 /// （query_id=NN / "status_id=open&amp;..." / 完全な URL）を1つ貼り付けて保存する。
 /// API キーは含めない（資格情報マネージャからヘッダ付与）。
 /// </summary>
@@ -38,7 +38,7 @@ internal sealed partial class SavedQueryForm : FormContent
 
         var query = _editing ?? new SavedQuery();
         query.Name = name;
-        query.Mode = Get("mode") == "count" ? "count" : "list";
+        query.PinnedToTopLevel = Get("pinned") == "true";
 
         var raw = Get("query").Trim();
         query.RawQuery = string.IsNullOrEmpty(raw) ? null : raw;
@@ -50,14 +50,14 @@ internal sealed partial class SavedQueryForm : FormContent
     private string BuildCard()
     {
         var name = _editing?.Name ?? string.Empty;
-        var mode = _editing?.Mode ?? "list";
         var raw = _editing?.RawQuery ?? string.Empty;
+        var pinned = (_editing?.PinnedToTopLevel ?? false) ? "true" : "false";
 
         var sb = new StringBuilder();
         sb.Append("{\"type\":\"AdaptiveCard\",\"$schema\":\"http://adaptivecards.io/schemas/adaptive-card.json\",\"version\":\"1.5\",\"body\":[");
         sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Input.Text\",\"id\":\"name\",\"label\":\"名前\",\"isRequired\":true,\"errorMessage\":\"名前は必須です\",\"value\":{J(name)}}},");
-        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Input.ChoiceSet\",\"id\":\"mode\",\"label\":\"モード\",\"value\":{J(mode)},\"choices\":[{{\"title\":\"一覧\",\"value\":\"list\"}},{{\"title\":\"件数\",\"value\":\"count\"}}]}},");
         sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Input.Text\",\"id\":\"query\",\"label\":\"クエリ\",\"isMultiline\":true,\"placeholder\":\"例: query_id=42 / status_id=open&assigned_to_id=me / https://redmine/issues?...\",\"value\":{J(raw)}}},");
+        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Input.Toggle\",\"id\":\"pinned\",\"title\":\"トップレベルに固定表示する\",\"value\":{J(pinned)}}},");
         sb.Append("{\"type\":\"TextBlock\",\"isSubtle\":true,\"wrap\":true,\"text\":\"Redmine でフィルタを保存し、URL の query_id を貼るのが簡単です。空欄なら未完了チケットを表示します。API キーは資格情報マネージャから付与されるため、クエリに key= は不要です。\"}");
         sb.Append("],\"actions\":[{\"type\":\"Action.Submit\",\"title\":\"保存\"}]}");
         return sb.ToString();

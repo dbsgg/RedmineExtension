@@ -3,9 +3,9 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
-using System.Linq;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using Windows.System;
 
 namespace RedmineExtension;
 
@@ -27,7 +27,7 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
         _history = new TicketHistory(_settings.MaxHistoryRetained);
         _store = new SavedQueryStore();
 
-        // 保存クエリの追加/編集/削除で top-level を更新する。
+        // 保存クエリの追加/削除/固定変更で top-level を更新する。
         _store.Changed += (_, _) => RaiseItemsChanged();
     }
 
@@ -38,93 +38,49 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
             new CommandItem(new RedmineExtensionPage(_settings, _api, _history)) { Title = DisplayName },
         };
 
-        var all = _store.All;
-
-        // 一覧モードは個別 top-level、件数モードは1つにまとめる。
-        foreach (var query in all.Where(q => q.Mode != "count"))
+        // top-level に固定されたクエリを個別コマンドとして並べる（固定はクエリごと）。
+        foreach (var query in _store.All)
         {
-            commands.Add(BuildSavedQueryCommand(query));
-        }
-
-        if (all.Any(q => q.Mode == "count"))
-        {
-            commands.Add(new CommandItem(new CountSummaryPage(_store, _api, _settings))
+            if (query.PinnedToTopLevel)
             {
-                Title = "保存クエリ（件数）",
-                Subtitle = "件数モードの保存クエリ一覧",
-                Icon = new IconInfo(""), // glyph:E8EC
-            });
+                commands.Add(BuildQueryTopLevel(query));
+            }
         }
 
-        commands.Add(new CommandItem(new SavedQueryFormPage(_store))
+        // 保存クエリのハブ（常に表示。中で 追加(Ctrl+A)・件数・一覧・編集/削除・固定切替）。
+        commands.Add(new CommandItem(new SavedQueryHubPage(_store, _api, _history, _settings))
         {
-            Title = "保存クエリを追加",
-            Icon = new IconInfo(""), // glyph:E710
+            Title = "保存クエリ",
+            Subtitle = "保存クエリの一覧・件数・追加",
+            Icon = new IconInfo(""), // glyph:E71C
         });
 
         return commands.ToArray();
     }
 
-    private CommandItem BuildSavedQueryCommand(SavedQuery query)
+    // 固定クエリの top-level コマンド（Enter=一覧 / Ctrl+Enter=Redmine / 固定解除・編集・削除）。
+    private CommandItem BuildQueryTopLevel(SavedQuery query)
     {
-        var editPage = new SavedQueryFormPage(_store, query);
-
-        var deleteCommand = new AnonymousCommand(() => _store.Remove(query.Id))
+        return new CommandItem(new SavedQueryPage(query, _api, _history, _settings, _store))
         {
-            Name = "削除",
-            Icon = new IconInfo(""), // glyph:E74D
-            Result = CommandResult.GoHome(),
-        };
-
-        return new CommandItem(new SavedQueryPage(query, _api, _history, _settings))
-        {
-            Title = query.Name,
-            Subtitle = Describe(query),
+            Title = SavedQueryText.Title(query),
+            Subtitle = SavedQueryText.Describe(query),
             Icon = new IconInfo(""), // glyph:E71C
             MoreCommands = [
-                new CommandContextItem(editPage) { Title = "編集" },
-                new CommandContextItem(deleteCommand),
+                new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = "Redmine で開く" })
+                {
+                    RequestedShortcut = KeyChordHelpers.FromModifiers(
+                        ctrl: true, alt: false, shift: false, win: false,
+                        vkey: VirtualKey.Enter, scanCode: 0),
+                },
+                new CommandContextItem(new SavedQueryFormPage(_store, query)) { Title = "編集" },
+                new CommandContextItem(new AnonymousCommand(() => _store.Remove(query.Id))
+                {
+                    Name = "削除",
+                    Icon = new IconInfo(""), // glyph:E74D
+                    Result = CommandResult.GoHome(),
+                }),
             ],
         };
-    }
-
-    private static string Describe(SavedQuery query)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrEmpty(query.ProjectName))
-        {
-            parts.Add(query.ProjectName);
-        }
-
-        AddCondition(parts, "トラッカー", query.Tracker);
-        AddCondition(parts, "ステータス", query.Status);
-        AddCondition(parts, "担当者", query.Assignee);
-
-        var label = parts.Count > 0 ? string.Join(" / ", parts) : "条件なし";
-        return query.Mode == "count" ? $"件数 — {label}" : label;
-    }
-
-    private static void AddCondition(List<string> parts, string label, FilterCondition condition)
-    {
-        if (condition is null || !condition.HasFilter)
-        {
-            return;
-        }
-
-        var names = string.Join(",", condition.Values.Select(v => v.Name));
-        var text = condition.Op switch
-        {
-            "o" => $"{label}:未完了",
-            "c" => $"{label}:完了",
-            "*" => $"{label}:すべて",
-            "=" => $"{label}:{names}",
-            "!" => $"{label}≠{names}",
-            _ => null,
-        };
-
-        if (!string.IsNullOrEmpty(text))
-        {
-            parts.Add(text);
-        }
     }
 }

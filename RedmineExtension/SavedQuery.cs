@@ -33,16 +33,13 @@ internal sealed class FilterCondition
 
 /// <summary>
 /// 保存クエリ。プロジェクト(単一)で絞り、トラッカー/ステータス/担当者を演算子＋複数値で指定する。
-/// 一覧モード(list)/件数モード(count)を持つ。秘密情報は含めない。
+/// 直近のチケット件数を記録する。秘密情報は含めない。
 /// </summary>
 internal sealed class SavedQuery
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
     public string Name { get; set; } = string.Empty;
-
-    /// <summary>"list"(一覧) または "count"(件数)。</summary>
-    public string Mode { get; set; } = "list";
 
     public int? ProjectId { get; set; }
 
@@ -59,6 +56,14 @@ internal sealed class SavedQuery
     /// 値があればこちらを優先し、フィールド条件は使わない。API キーは含めない。
     /// </summary>
     public string? RawQuery { get; set; }
+
+    /// <summary>直近に取得したチケット件数と取得時刻(UTC)。ハブ表示・件数キャッシュに使う。</summary>
+    public int? Count { get; set; }
+
+    public DateTime? CountUpdatedUtc { get; set; }
+
+    /// <summary>top-level に固定表示するか（クエリごと）。</summary>
+    public bool PinnedToTopLevel { get; set; }
 }
 
 // source-gen により反射なしで直列/逆直列化 → AOT/トリミング安全。
@@ -126,6 +131,23 @@ internal sealed class SavedQueryStore
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>件数を記録する(永続化)。Changed は発火しない(top-level 再構築を避けるため)。</summary>
+    public void UpdateCount(string id, int count)
+    {
+        lock (_lock)
+        {
+            var query = _entries.FirstOrDefault(e => e.Id == id);
+            if (query is null)
+            {
+                return;
+            }
+
+            query.Count = count;
+            query.CountUpdatedUtc = DateTime.UtcNow;
+            Save();
+        }
     }
 
     private List<SavedQuery> Load()

@@ -8,9 +8,8 @@ using Windows.System;
 namespace RedmineExtension;
 
 /// <summary>
-/// 保存クエリの結果ページ。
-/// 一覧モード: フィルタ結果を並べ、ホスト標準のクエリ絞り込み(ファジー)で検索する。
-/// 件数モード: total_count を「○件」と表示し、クリックで Redmine の該当一覧を開く。
+/// 保存クエリの結果一覧ページ。フィルタ結果を並べ、ホスト標準のクエリ絞り込み(ファジー)で検索する。
+/// 開く度に取得し、その total_count を保存クエリの件数として記録する。
 /// </summary>
 internal sealed partial class SavedQueryPage : ListPage
 {
@@ -21,22 +20,24 @@ internal sealed partial class SavedQueryPage : ListPage
     private readonly RedmineApi _api;
     private readonly TicketHistory _history;
     private readonly SettingsManager _settings;
+    private readonly SavedQueryStore _store;
 
     private IListItem[] _items;
     private DateTime _loadedAtUtc = DateTime.MinValue;
     private bool _loading;
 
-    public SavedQueryPage(SavedQuery query, RedmineApi api, TicketHistory history, SettingsManager settings)
+    public SavedQueryPage(SavedQuery query, RedmineApi api, TicketHistory history, SettingsManager settings, SavedQueryStore store)
     {
         _query = query;
         _api = api;
         _history = history;
         _settings = settings;
+        _store = store;
 
         Title = query.Name;
         Name = "Open";
         Icon = new IconInfo(""); // glyph:E71C
-        PlaceholderText = query.Mode == "count" ? string.Empty : "クエリでファジー絞り込み";
+        PlaceholderText = "クエリでファジー絞り込み";
         ShowDetails = true; // フォーカス時に右ペインの詳細を表示する
 
         _items = [new ListItem(new NoOpCommand()) { Title = "読み込み中…" }];
@@ -64,9 +65,20 @@ internal sealed partial class SavedQueryPage : ListPage
                 return;
             }
 
-            _items = _query.Mode == "count"
-                ? await BuildCountAsync().ConfigureAwait(false)
-                : await BuildListAsync().ConfigureAwait(false);
+            var (issues, total) = await _api.SearchIssuesAsync(_query, 100).ConfigureAwait(false);
+
+            // 一覧を開いたタイミングで件数を記録する（追加取得なし）。
+            _store.UpdateCount(_query.Id, total);
+
+            _items = issues.Count == 0
+                ? [
+                    new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)))
+                    {
+                        Title = "該当チケットなし",
+                        Subtitle = "Redmine で開く",
+                    },
+                  ]
+                : issues.Select(BuildIssueItem).ToArray();
         }
         catch (Exception ex)
         {
@@ -84,36 +96,6 @@ internal sealed partial class SavedQueryPage : ListPage
             _loading = false;
             RaiseItemsChanged();
         }
-    }
-
-    private async Task<IListItem[]> BuildCountAsync()
-    {
-        var (_, total) = await _api.SearchIssuesAsync(_query, 1).ConfigureAwait(false);
-        return [
-            new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)))
-            {
-                Title = $"{_query.Name}: {total} 件",
-                Subtitle = "Redmine で一覧を開く",
-                Icon = new IconInfo(""), // glyph:E8EC
-            },
-        ];
-    }
-
-    private async Task<IListItem[]> BuildListAsync()
-    {
-        var (issues, _) = await _api.SearchIssuesAsync(_query, 100).ConfigureAwait(false);
-        if (issues.Count == 0)
-        {
-            return [
-                new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)))
-                {
-                    Title = "該当チケットなし",
-                    Subtitle = "Redmine で開く",
-                },
-            ];
-        }
-
-        return issues.Select(BuildIssueItem).ToArray();
     }
 
     private IListItem BuildIssueItem(IssueSummary issue)
