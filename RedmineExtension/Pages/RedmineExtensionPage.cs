@@ -115,7 +115,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
             ApplyDetail(item, summary, url);
         }
 
-        item.MoreCommands = [CopyContext(id), RefreshContext(id, item)];
+        item.MoreCommands = [CopyContext(id), RefreshContext(id, item), CommentsContext(id)];
 
         return item;
     }
@@ -238,7 +238,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
             ApplyDetail(item, summary, url);
         }
 
-        item.MoreCommands = [CopyContext(entry.Id), RefreshContext(entry.Id, item)];
+        item.MoreCommands = [CopyContext(entry.Id), RefreshContext(entry.Id, item), CommentsContext(entry.Id)];
 
         return item;
     }
@@ -250,6 +250,16 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
             RequestedShortcut = KeyChordHelpers.FromModifiers(
                 ctrl: true, alt: false, shift: false, win: false,
                 vkey: VirtualKey.Enter, scanCode: 0),
+        };
+
+    private CommandContextItem CommentsContext(int id) =>
+        new(new CommentsPage(id, _api))
+        {
+            // Ctrl+C でコメントページを開く。
+            Title = "コメント",
+            RequestedShortcut = KeyChordHelpers.FromModifiers(
+                ctrl: true, alt: false, shift: false, win: false,
+                vkey: VirtualKey.C, scanCode: 0),
         };
 
     private CommandContextItem RefreshContext(int id, ListItem item) =>

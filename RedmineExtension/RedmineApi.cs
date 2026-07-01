@@ -22,6 +22,12 @@ internal sealed record IssueSummary(
     string? DueDate = null,
     string? Description = null);
 
+/// <summary>チケットのコメント（journal の notes）または説明。</summary>
+internal sealed record IssueComment(string Author, string Notes, string CreatedOn);
+
+/// <summary>チケットの説明＋コメント一式。</summary>
+internal sealed record IssueThread(IssueComment? Description, IReadOnlyList<IssueComment> Comments);
+
 /// <summary>
 /// Redmine REST API への最小限のアクセス。タイトル取得・検索に使う。
 /// API キー・サーバー URL は <see cref="SettingsManager"/>(実行時入力)から取得し、
@@ -53,6 +59,42 @@ internal sealed class RedmineApi
     {
         using var doc = await GetAsync($"{_settings.ServerUrl}/issues/{id}.json").ConfigureAwait(false);
         return ParseIssue(doc.RootElement.GetProperty("issue"));
+    }
+
+    /// <summary>チケットの説明とコメント（journals の notes）を取得する。失敗時は例外を投げる。</summary>
+    public async Task<IssueThread> GetThreadAsync(int id)
+    {
+        using var doc = await GetAsync($"{_settings.ServerUrl}/issues/{id}.json?include=journals").ConfigureAwait(false);
+        var issue = doc.RootElement.GetProperty("issue");
+
+        static string? Text(JsonElement e, string prop) =>
+            e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        static string Name(JsonElement e, string prop) =>
+            e.TryGetProperty(prop, out var o) && o.TryGetProperty("name", out var n) ? n.GetString() ?? string.Empty : string.Empty;
+
+        IssueComment? description = null;
+        var descText = Text(issue, "description");
+        if (!string.IsNullOrWhiteSpace(descText))
+        {
+            description = new IssueComment(Name(issue, "author"), descText, Text(issue, "created_on") ?? string.Empty);
+        }
+
+        var comments = new List<IssueComment>();
+        if (issue.TryGetProperty("journals", out var journals) && journals.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var journal in journals.EnumerateArray())
+            {
+                var text = Text(journal, "notes");
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    continue;
+                }
+
+                comments.Add(new IssueComment(Name(journal, "user"), text, Text(journal, "created_on") ?? string.Empty));
+            }
+        }
+
+        return new IssueThread(description, comments);
     }
 
     // issues.json / issues/{id}.json のチケット要素から基本情報を取り出す。

@@ -116,6 +116,13 @@ internal sealed partial class SavedQueryPage : ListPage
                         ctrl: true, alt: false, shift: false, win: false,
                         vkey: VirtualKey.Enter, scanCode: 0),
                 },
+                new CommandContextItem(new CommentsPage(issue.Id, _api))
+                {
+                    Title = "コメント",
+                    RequestedShortcut = KeyChordHelpers.FromModifiers(
+                        ctrl: true, alt: false, shift: false, win: false,
+                        vkey: VirtualKey.C, scanCode: 0),
+                },
             ],
         };
     }
