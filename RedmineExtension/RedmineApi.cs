@@ -7,8 +7,20 @@ using System.Threading.Tasks;
 
 namespace RedmineExtension;
 
-/// <summary>検索結果のチケット概要。</summary>
-internal sealed record IssueSummary(int Id, string Subject);
+/// <summary>チケットの概要（一覧/単体レスポンスから取得する基本情報）。</summary>
+internal sealed record IssueSummary(
+    int Id,
+    string Subject,
+    string? Tracker = null,
+    string? Status = null,
+    string? Priority = null,
+    string? Assignee = null,
+    int DoneRatio = 0,
+    string? UpdatedOn = null,
+    string? Author = null,
+    string? StartDate = null,
+    string? DueDate = null,
+    string? Description = null);
 
 /// <summary>
 /// Redmine REST API への最小限のアクセス。タイトル取得・検索に使う。
@@ -36,6 +48,39 @@ internal sealed class RedmineApi
         return doc.RootElement.GetProperty("issue").GetProperty("subject").GetString();
     }
 
+    /// <summary>チケットの基本情報を取得する。失敗時は例外を投げる。</summary>
+    public async Task<IssueSummary> GetIssueAsync(int id)
+    {
+        using var doc = await GetAsync($"{_settings.ServerUrl}/issues/{id}.json").ConfigureAwait(false);
+        return ParseIssue(doc.RootElement.GetProperty("issue"));
+    }
+
+    // issues.json / issues/{id}.json のチケット要素から基本情報を取り出す。
+    private static IssueSummary ParseIssue(JsonElement e)
+    {
+        string? Name(string prop) =>
+            e.TryGetProperty(prop, out var o) && o.TryGetProperty("name", out var n) ? n.GetString() : null;
+
+        string? Str(string prop) =>
+            e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+        var done = e.TryGetProperty("done_ratio", out var d) && d.TryGetInt32(out var dr) ? dr : 0;
+
+        return new IssueSummary(
+            e.GetProperty("id").GetInt32(),
+            e.TryGetProperty("subject", out var s) ? s.GetString() ?? string.Empty : string.Empty,
+            Tracker: Name("tracker"),
+            Status: Name("status"),
+            Priority: Name("priority"),
+            Assignee: Name("assigned_to"),
+            DoneRatio: done,
+            UpdatedOn: Str("updated_on"),
+            Author: Name("author"),
+            StartDate: Str("start_date"),
+            DueDate: Str("due_date"),
+            Description: Str("description"));
+    }
+
     /// <summary>クエリに合致するチケットを取得する。件数モード用に total_count も返す。</summary>
     public async Task<(IReadOnlyList<IssueSummary> Issues, int TotalCount)> SearchIssuesAsync(SavedQuery query, int limit)
     {
@@ -46,12 +91,33 @@ internal sealed class RedmineApi
         var issues = new List<IssueSummary>();
         foreach (var issue in doc.RootElement.GetProperty("issues").EnumerateArray())
         {
-            issues.Add(new IssueSummary(
-                issue.GetProperty("id").GetInt32(),
-                issue.GetProperty("subject").GetString() ?? string.Empty));
+            issues.Add(ParseIssue(issue));
         }
 
         return (issues, total);
+    }
+
+    /// <summary>複数チケットの基本情報を1リクエストで取得する（issue_id フィルタ）。履歴の詳細用。</summary>
+    public async Task<IReadOnlyDictionary<int, IssueSummary>> GetIssuesAsync(IReadOnlyCollection<int> ids)
+    {
+        var result = new Dictionary<int, IssueSummary>();
+        if (ids.Count == 0)
+        {
+            return result;
+        }
+
+        // status_id=* で完了チケットも含める。issue_id はカンマ区切りで複数指定できる。
+        var csv = string.Join(",", ids);
+        var url = $"{_settings.ServerUrl}/issues.json?issue_id={csv}&status_id=*&limit={ids.Count}";
+        using var doc = await GetAsync(url).ConfigureAwait(false);
+
+        foreach (var issue in doc.RootElement.GetProperty("issues").EnumerateArray())
+        {
+            var summary = ParseIssue(issue);
+            result[summary.Id] = summary;
+        }
+
+        return result;
     }
 
     /// <summary>件数モードのクリックで開く Redmine の Web 検索 URL。</summary>

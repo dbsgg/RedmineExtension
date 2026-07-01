@@ -28,6 +28,13 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
     private readonly HashSet<int> _loading = new();
     private readonly object _loadLock = new();
 
+    // id → チケット概要（副題・右ペイン詳細の元。履歴でも共有）。バッチ/単体取得で埋める。
+    private readonly ConcurrentDictionary<int, IssueSummary> _summaries = new();
+    private readonly HashSet<int> _detailsAttempted = new();
+    private readonly HashSet<int> _detailsLoading = new();
+    private readonly object _detailsLock = new();
+    private bool _batchLoading;
+
     private string _search = string.Empty;
 
     public RedmineExtensionPage(SettingsManager settings, RedmineApi api, TicketHistory history)
@@ -36,6 +43,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
         Title = "Redmine";
         Name = "Open";
         PlaceholderText = "チケット番号を入力（番号の後にスペースでタイトル表示）";
+        ShowDetails = true; // フォーカス時に右ペインの詳細を表示する
 
         _settings = settings;
         _api = api;
@@ -94,13 +102,28 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
     private ListItem CreateTicketItem(int id)
     {
         var url = _api.IssueUrl(id);
-        return new ListItem(new OpenTicketCommand(url, id, () => _subjects.GetValueOrDefault(id), _history))
+        var item = new ListItem(new OpenTicketCommand(url, id, () => _subjects.GetValueOrDefault(id), _history))
         {
             Title = ComposeTitle(id),
-            Subtitle = url,
+            Subtitle = string.Empty,
             Icon = new IconInfo(""), // Globe
-            MoreCommands = [CopyContext(id)],
         };
+
+        // 取得済みなら副題・詳細を即反映。
+        if (_summaries.TryGetValue(id, out var summary))
+        {
+            ApplyDetail(item, summary, url);
+        }
+
+        item.MoreCommands = [CopyContext(id), RefreshContext(id, item)];
+
+        return item;
+    }
+
+    private static void ApplyDetail(ListItem item, IssueSummary summary, string url)
+    {
+        item.Subtitle = TicketDetails.Subtitle(summary);
+        item.Details = TicketDetails.Build(summary, url);
     }
 
     private string ComposeTitle(int id)
@@ -143,8 +166,13 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
             string? subject = null;
             try
             {
-                subject = await _api.GetIssueSubjectAsync(id).ConfigureAwait(false);
+                var issue = await _api.GetIssueAsync(id).ConfigureAwait(false);
+                subject = issue.Subject;
                 _errors.TryRemove(id, out _);
+
+                // 副題・右ペイン詳細を表示する（履歴と共有するためキャッシュ）。
+                _summaries[id] = issue;
+                ApplyDetail(item, issue, _api.IssueUrl(id));
             }
             catch (System.Exception ex)
             {
@@ -171,10 +199,14 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
         // 検索ボックスが空のときだけ直近の履歴を設定件数まで表示する。
         if (string.IsNullOrWhiteSpace(raw))
         {
-            foreach (var entry in _history.Recent.Take(_settings.HistoryCount))
+            var entries = _history.Recent.Take(_settings.HistoryCount).ToList();
+            foreach (var entry in entries)
             {
                 items.Add(HistoryItem(entry));
             }
+
+            // 履歴チケットの詳細を 1 リクエストでまとめて取得（負荷を抑える）。
+            EnsureHistoryDetails(entries.Select(e => e.Id).ToList());
         }
 
         items.Add(new ListItem(new OpenUrlCommand(_settings.ServerUrl))
@@ -193,13 +225,22 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
         var title = entry.Title;
         var label = string.IsNullOrWhiteSpace(title) ? $"#{entry.Id} を開く" : $"#{entry.Id} {title}";
 
-        return new ListItem(new OpenTicketCommand(url, entry.Id, () => title, _history))
+        var item = new ListItem(new OpenTicketCommand(url, entry.Id, () => title, _history))
         {
             Title = label,
-            Subtitle = url,
+            Subtitle = string.Empty,
             Icon = new IconInfo(""), // History
-            MoreCommands = [CopyContext(entry.Id)],
         };
+
+        // 取得済みなら副題・右ペイン詳細を即表示。
+        if (_summaries.TryGetValue(entry.Id, out var summary))
+        {
+            ApplyDetail(item, summary, url);
+        }
+
+        item.MoreCommands = [CopyContext(entry.Id), RefreshContext(entry.Id, item)];
+
+        return item;
     }
 
     private CommandContextItem CopyContext(int id) =>
@@ -210,6 +251,122 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
                 ctrl: true, alt: false, shift: false, win: false,
                 vkey: VirtualKey.Enter, scanCode: 0),
         };
+
+    private CommandContextItem RefreshContext(int id, ListItem item) =>
+        new(new AnonymousCommand(() => RefreshTicket(id, item))
+        {
+            Name = "最新に更新",
+            Icon = new IconInfo(""), // glyph:E72C
+            Result = CommandResult.KeepOpen(),
+        })
+        {
+            // Ctrl+R で最新の情報に更新（再取得）。
+            RequestedShortcut = KeyChordHelpers.FromModifiers(
+                ctrl: true, alt: false, shift: false, win: false,
+                vkey: VirtualKey.R, scanCode: 0),
+        };
+
+    // 最新に更新（単体取得、include=journals で最新コメント込み）。キャッシュを上書きする。
+    private void RefreshTicket(int id, ListItem item)
+    {
+        if (!_api.IsConfigured)
+        {
+            return;
+        }
+
+        lock (_detailsLock)
+        {
+            if (!_detailsLoading.Add(id))
+            {
+                return;
+            }
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var issue = await _api.GetIssueAsync(id).ConfigureAwait(false);
+                _summaries[id] = issue;
+                _subjects[id] = issue.Subject;
+                ApplyDetail(item, issue, _api.IssueUrl(id));
+                item.Title = string.IsNullOrEmpty(issue.Subject) ? $"#{id}" : $"#{id} {issue.Subject}";
+            }
+            catch
+            {
+                // 取得失敗は無視。
+            }
+            finally
+            {
+                lock (_detailsLock)
+                {
+                    _detailsLoading.Remove(id);
+                }
+
+                // RaiseItemsChanged() は呼ばない（リスト再生成でフォーカスが先頭に戻るため）。
+                // Title/Subtitle/Details は同一項目の PropertyChanged でその場更新される。
+            }
+        });
+    }
+
+    // 履歴チケットの詳細を 1 リクエストでまとめて取得しキャッシュする。
+    private void EnsureHistoryDetails(IReadOnlyList<int> ids)
+    {
+        if (!_api.IsConfigured)
+        {
+            return;
+        }
+
+        List<int> missing;
+        lock (_detailsLock)
+        {
+            if (_batchLoading)
+            {
+                return;
+            }
+
+            missing = ids
+                .Where(id => !_summaries.ContainsKey(id) && !_detailsAttempted.Contains(id))
+                .Distinct()
+                .ToList();
+
+            if (missing.Count == 0)
+            {
+                return;
+            }
+
+            _batchLoading = true;
+            foreach (var id in missing)
+            {
+                _detailsAttempted.Add(id);
+            }
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var map = await _api.GetIssuesAsync(missing).ConfigureAwait(false);
+                foreach (var kv in map)
+                {
+                    _summaries[kv.Key] = kv.Value;
+                }
+            }
+            catch
+            {
+                // 取得失敗は無視。
+            }
+            finally
+            {
+                lock (_detailsLock)
+                {
+                    _batchLoading = false;
+                }
+
+                RaiseItemsChanged();
+            }
+        });
+    }
 
     // 未設定時に設定ページへ誘導する項目。Enter で設定を開く。
     private ListItem BuildSettingsPrompt() =>

@@ -37,6 +37,7 @@ internal sealed partial class SavedQueryPage : ListPage
         Name = "Open";
         Icon = new IconInfo(""); // glyph:E71C
         PlaceholderText = query.Mode == "count" ? string.Empty : "クエリでファジー絞り込み";
+        ShowDetails = true; // フォーカス時に右ペインの詳細を表示する
 
         _items = [new ListItem(new NoOpCommand()) { Title = "読み込み中…" }];
     }
@@ -123,7 +124,8 @@ internal sealed partial class SavedQueryPage : ListPage
         return new ListItem(new OpenTicketCommand(url, issue.Id, () => subject, _history))
         {
             Title = $"#{issue.Id} {subject}",
-            Subtitle = url,
+            Subtitle = TicketDetails.Subtitle(issue),
+            Details = TicketDetails.Build(issue, url),
             Icon = new IconInfo(""), // glyph:E774
             MoreCommands = [
                 new CommandContextItem(new CopyTicketLinkCommand(_api, issue.Id, _history))
