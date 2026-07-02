@@ -34,3 +34,6 @@ appsettings.*.json
 secrets.json
 *.local.json
 .env
+
+# Release installers (build-exe.ps1)
+Installer/

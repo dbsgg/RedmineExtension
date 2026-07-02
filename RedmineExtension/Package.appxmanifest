@@ -10,10 +10,10 @@
 
   <Identity
     Name="RedmineExtension"
-    Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+    Publisher="CN=dbsgg"
     Version="0.0.1.0" />
-  <!-- When you're ready to publish your extension, you'll need to change the
-       Publisher= to match your own identity -->
+  <!-- MSIX 署名時は Publisher を証明書のサブジェクトと一致させること。
+       winget 配布（EXE / unpackaged）ではこの Identity は使われない。 -->
 
   <Properties>
     <DisplayName>Redmine</DisplayName>

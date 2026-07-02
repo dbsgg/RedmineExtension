@@ -1,5 +1,14 @@
 # WinGet Publishing Guide
 
+> **⚠️ BROKEN RECIPE — verified 2026-07-03.** This document ships with the official extension
+> template, but the unpackaged/EXE registration it describes (`Software\Classes\CLSID` +
+> `InprocServer32`) is **not implemented by Command Palette**: the host only enumerates
+> MSIX-packaged extensions via `AppExtensionCatalog.Open("com.microsoft.commandpalette")`
+> (see `WinRTExtensionService.cs`; no registry-based discovery exists anywhere in the
+> PowerToys repo). An installer built from this guide installs fine but the extension never
+> appears in CmdPal. Use a **signed MSIX** (Microsoft Store or winget `InstallerType: msix`)
+> instead — see `RELEASING.md` at the repo root.
+
 Complete step-by-step guide for publishing your Command Palette extension to WinGet for `winget install` discovery and installation.
 
 ## Why WinGet?

@@ -1,0 +1,19 @@
+# 既定はテキスト・改行自動変換（Windows 開発者は CRLF、リポジトリ内は LF）
+* text=auto
+
+# コードはリポジトリ内 LF（.editorconfig の crlf はワーキングコピー側）
+*.cs text
+*.csproj text
+*.sln text
+*.md text
+*.yml text
+*.yaml text
+*.json text
+*.editorconfig text
+*.iss text
+*.ps1 text
+
+# バイナリ
+*.png binary
+*.ico binary
+*.pfx binary

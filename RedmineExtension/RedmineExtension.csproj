@@ -10,7 +10,8 @@
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
 
-    <PublishProfile>win-$(Platform).pubxml</PublishProfile>
+    <!-- MSIX 用の発行プロファイル。unpackaged (winget EXE) 発行時は無効化する。 -->
+    <PublishProfile Condition="'$(WindowsPackageType)' != 'None'">win-$(Platform).pubxml</PublishProfile>
     <EnableMsixTooling>true</EnableMsixTooling>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -84,7 +85,7 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'!='Debug'">
-    <!-- In Release builds, trimming is enabled by default. 
+    <!-- In Release builds, trimming is enabled by default.
          feel free to disable this if needed -->
     <PublishTrimmed>true</PublishTrimmed>
 
@@ -92,5 +93,15 @@
     <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
   </PropertyGroup>
 
+  <!-- unpackaged (winget EXE) 発行: フレームワーク依存のプレーンなフォルダー出力にする。
+       トリミング/単一ファイルは self-contained 前提のため無効化（ILLink も走らなくなり、
+       SDK 環境差によるタスクホスト問題も回避できる）。上の Release 用グループより後に
+       置いて上書きすること。 -->
+  <PropertyGroup Condition="'$(WindowsPackageType)' == 'None'">
+    <SelfContained>false</SelfContained>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishReadyToRun>false</PublishReadyToRun>
+  </PropertyGroup>
 
 </Project>

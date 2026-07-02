@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Detect version
+        id: version
+        run: |
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
+
+      # publish + Inno Setup はローカルと同じスクリプトに一本化する
+      # （ISCC.exe は PATH / レジストリ / 既定パスから自動検出。unpackaged 用の
+      #   発行設定は csproj の WindowsPackageType=None 条件で切り替わる）。
+      - name: Build installer
+        run: .\build-exe.ps1 -Version "${{ steps.version.outputs.VERSION }}" -Architectures ${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.arch }}
+          path: Installer/*.exe
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.exe
+          generate_release_notes: true
+
+  # 初回の winget 提出は手動（wingetcreate new）。2 回目以降はこのジョブが
+  # microsoft/winget-pkgs へ更新 PR を送る。要 WINGET_PAT シークレット（public_repo）。
+  winget-update:
+    needs: release
+    runs-on: windows-latest
+    if: ${{ vars.WINGET_ENABLED == 'true' }}
+
+    steps:
+      - name: Detect version
+        id: version
+        run: |
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Update WinGet manifest
+        run: |
+          $baseUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}"
+          wingetcreate update dbsgg.RedmineExtension `
+            --version ${{ steps.version.outputs.VERSION }} `
+            --urls "$baseUrl/RedmineExtension_${{ steps.version.outputs.VERSION }}_x64.exe" "$baseUrl/RedmineExtension_${{ steps.version.outputs.VERSION }}_arm64.exe" `
+            --submit `
+            --token ${{ secrets.WINGET_PAT }}
