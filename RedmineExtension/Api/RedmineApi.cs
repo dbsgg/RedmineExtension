@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -24,6 +26,9 @@ internal sealed record IssueSummary(
 
 /// <summary>チケットのコメント（journal の notes）または説明。</summary>
 internal sealed record IssueComment(string Author, string Notes, string CreatedOn);
+
+/// <summary>チケットのステータス（/issue_statuses.json の1件）。</summary>
+internal sealed record IssueStatus(int Id, string Name);
 
 /// <summary>チケットの説明＋コメント一式。</summary>
 internal sealed record IssueThread(IssueComment? Description, IReadOnlyList<IssueComment> Comments);
@@ -160,6 +165,57 @@ internal sealed class RedmineApi
         }
 
         return result;
+    }
+
+    /// <summary>ステータスの一覧を取得する。失敗時は例外を投げる。</summary>
+    public async Task<IReadOnlyList<IssueStatus>> GetStatusesAsync()
+    {
+        using var doc = await GetAsync($"{_settings.ServerUrl}/issue_statuses.json").ConfigureAwait(false);
+
+        var list = new List<IssueStatus>();
+        foreach (var status in doc.RootElement.GetProperty("issue_statuses").EnumerateArray())
+        {
+            list.Add(new IssueStatus(
+                status.GetProperty("id").GetInt32(),
+                status.TryGetProperty("name", out var n) ? n.GetString() ?? string.Empty : string.Empty));
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// チケットを部分更新する（簡易編集: ステータス変更・コメント追加のみ）。
+    /// 詳細な編集は Web で行う想定のため、これ以上のフィールドは足さない。失敗時は例外を投げる。
+    /// </summary>
+    public async Task UpdateIssueAsync(int id, int? statusId = null, string? notes = null)
+    {
+        // 反射なしの Utf8JsonWriter で {"issue":{...}} を組み立てる（AOT/トリミング安全）。
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteStartObject("issue");
+            if (statusId is int s)
+            {
+                writer.WriteNumber("status_id", s);
+            }
+
+            if (!string.IsNullOrWhiteSpace(notes))
+            {
+                writer.WriteString("notes", notes);
+            }
+
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Put, $"{_settings.ServerUrl}/issues/{id}.json");
+        request.Headers.Add("X-Redmine-API-Key", _settings.ApiKey);
+        request.Content = new ByteArrayContent(buffer.ToArray());
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        using var response = await Http.SendAsync(request).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
     }
 
     /// <summary>件数モードのクリックで開く Redmine の Web 検索 URL。</summary>

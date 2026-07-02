@@ -18,6 +18,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
     private readonly RedmineApi _api;
     private readonly TicketHistory _history;
     private readonly SavedQueryHubPage _hub;
+    private readonly CustomizePage _customize;
 
     // チケット項目は id 単位でキャッシュし、取得完了時に Title を更新する。
     private readonly ConcurrentDictionary<int, ListItem> _ticketItems = new();
@@ -38,18 +39,19 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
 
     private string _search = string.Empty;
 
-    public RedmineExtensionPage(SettingsManager settings, RedmineApi api, TicketHistory history, SavedQueryHubPage hub)
+    public RedmineExtensionPage(SettingsManager settings, RedmineApi api, TicketHistory history, SavedQueryHubPage hub, CustomizePage customize)
     {
         Icon = new IconInfo("");
         Title = "Redmine";
-        Name = "開く";
-        PlaceholderText = "チケット番号を入力（番号の後にスペースでタイトル表示）";
+        Name = Strings.Common.Open;
+        PlaceholderText = Strings.Tickets.SearchPlaceholder;
         ShowDetails = true; // フォーカス時に右ペインの詳細を表示する
 
         _settings = settings;
         _api = api;
         _history = history;
         _hub = hub;
+        _customize = customize;
     }
 
     public override void UpdateSearchText(string oldSearch, string newSearch)
@@ -118,15 +120,20 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
             ApplyDetail(item, summary, url);
         }
 
-        item.MoreCommands = [OpenContext(id), CopyContext(id), RefreshContext(id, item)];
+        item.MoreCommands = [
+            OpenContext(id), CopyContext(id), RefreshContext(id, item),
+            TicketEdit.StatusContext(_api, id), TicketEdit.AddCommentContext(_api, id),
+            Navigation.BackContext(),
+            Navigation.HomeContext(),
+        ];
 
         return item;
     }
 
-    private static void ApplyDetail(ListItem item, IssueSummary summary, string url)
+    private void ApplyDetail(ListItem item, IssueSummary summary, string url)
     {
         item.Subtitle = TicketDetails.Subtitle(summary);
-        item.Details = TicketDetails.Build(summary, url);
+        item.Details = TicketDetails.Build(summary, url, _settings.DefaultDetailFields);
     }
 
     private string ComposeTitle(int id)
@@ -162,7 +169,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
             }
         }
 
-        item.Title = $"#{id}（タイトル取得中…）";
+        item.Title = Strings.Tickets.FetchingTitle(id);
 
         _ = Task.Run(async () =>
         {
@@ -215,9 +222,17 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
         // 保存クエリのハブへ遷移（Enter=遷移の体系に合わせた入口）。
         items.Add(new ListItem(_hub)
         {
-            Title = "保存クエリ",
-            Subtitle = "保存クエリの一覧・件数・追加",
+            Title = Strings.Queries.HubTitle,
+            Subtitle = Strings.Queries.HubSubtitle,
             Icon = new IconInfo(""), // glyph:E71C
+        });
+
+        // カスタマイズフォームへの入口（設定ページは接続系のみのため、表示・キーはこちら）。
+        items.Add(new ListItem(_customize)
+        {
+            Title = Strings.Customize.PageTitle,
+            Subtitle = Strings.Customize.ItemSubtitle,
+            Icon = new IconInfo(""), // glyph:E771
         });
 
         return items.ToArray();
@@ -243,7 +258,12 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
             ApplyDetail(item, summary, url);
         }
 
-        item.MoreCommands = [OpenContext(entry.Id), CopyContext(entry.Id), RefreshContext(entry.Id, item)];
+        item.MoreCommands = [
+            OpenContext(entry.Id), CopyContext(entry.Id), RefreshContext(entry.Id, item),
+            TicketEdit.StatusContext(_api, entry.Id), TicketEdit.AddCommentContext(_api, entry.Id),
+            Navigation.BackContext(),
+            Navigation.HomeContext(),
+        ];
 
         return item;
     }
@@ -256,32 +276,26 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
     private CommandContextItem OpenContext(int id) =>
         new(new OpenTicketCommand(_api.IssueUrl(id), id, () => TitleFor(id), _history))
         {
-            RequestedShortcut = KeyChordHelpers.FromModifiers(
-                ctrl: true, alt: false, shift: false, win: false,
-                vkey: VirtualKey.Enter, scanCode: 0),
+            RequestedShortcut = Keybindings.OpenInBrowser,
         };
 
     private CommandContextItem CopyContext(int id) =>
         new(new CopyTicketLinkCommand(_api, id, _history))
         {
             // Ctrl+C で「#番号 タイトル」リンクをコピー（Windows のコピー慣例）。
-            RequestedShortcut = KeyChordHelpers.FromModifiers(
-                ctrl: true, alt: false, shift: false, win: false,
-                vkey: VirtualKey.C, scanCode: 0),
+            RequestedShortcut = Keybindings.CopyLink,
         };
 
     private CommandContextItem RefreshContext(int id, ListItem item) =>
         new(new AnonymousCommand(() => RefreshTicket(id, item))
         {
-            Name = "最新に更新",
+            Name = Strings.Common.Refresh,
             Icon = new IconInfo(""), // glyph:E72C
             Result = CommandResult.KeepOpen(),
         })
         {
             // Ctrl+R で最新の情報に更新（再取得）。
-            RequestedShortcut = KeyChordHelpers.FromModifiers(
-                ctrl: true, alt: false, shift: false, win: false,
-                vkey: VirtualKey.R, scanCode: 0),
+            RequestedShortcut = Keybindings.Refresh,
         };
 
     // 最新に更新（単体取得、include=journals で最新コメント込み）。キャッシュを上書きする。
@@ -390,8 +404,8 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
     private ListItem BuildSettingsPrompt() =>
         new ListItem(_settings.SettingsPage)
         {
-            Title = "Redmine の設定が必要です",
-            Subtitle = "Enter で設定を開き、URL と API キーを入力してください",
+            Title = Strings.Setup.RequiredTitle,
+            Subtitle = Strings.Setup.RequiredSubtitle,
             Icon = new IconInfo(""), // glyph:E713
         };
 }

@@ -16,8 +16,7 @@ namespace RedmineExtension;
 /// </summary>
 internal sealed partial class SavedQueryHubPage : ListPage
 {
-    // 件数の鮮度。これを超えたら開いた際に再取得する。
-    private static readonly TimeSpan CountTtl = TimeSpan.FromMinutes(30);
+    // 件数の鮮度(TTL)は設定から取得する（既定 30 分）。
 
     // GetItems 連続呼び出しでの多重更新を防ぐ間隔。
     private static readonly TimeSpan RefreshThrottle = TimeSpan.FromSeconds(2);
@@ -33,6 +32,7 @@ internal sealed partial class SavedQueryHubPage : ListPage
     private readonly Dictionary<string, ListItem> _itemsById = new();
     private IListItem[] _items;
     private bool _built;
+    private bool _showedSetupPrompt; // 未設定誘導を表示中（設定完了を検知して作り直すため）。
     private bool _refreshing;
     private DateTime _lastRefreshUtc = DateTime.MinValue;
 
@@ -43,12 +43,12 @@ internal sealed partial class SavedQueryHubPage : ListPage
         _history = history;
         _settings = settings;
 
-        Title = "保存クエリ";
-        Name = "開く";
+        Title = Strings.Queries.HubTitle;
+        Name = Strings.Common.Open;
         Icon = new IconInfo(""); // glyph:E71C
-        PlaceholderText = "保存クエリを選択（Ctrl+N で追加）";
+        PlaceholderText = Strings.Queries.HubPlaceholder;
 
-        _items = [new ListItem(new NoOpCommand()) { Title = "読み込み中…" }];
+        _items = [new ListItem(new NoOpCommand()) { Title = Strings.Common.Loading }];
 
         // 追加/編集/削除で作り直す。
         _store.Changed += (_, _) =>
@@ -60,7 +60,8 @@ internal sealed partial class SavedQueryHubPage : ListPage
 
     public override IListItem[] GetItems()
     {
-        if (!_built)
+        // 未設定誘導のまま設定が完了した場合も作り直す（固着すると復帰手段が無くなる）。
+        if (!_built || (_showedSetupPrompt && _api.IsConfigured))
         {
             _built = true;
             BuildItems();
@@ -74,10 +75,11 @@ internal sealed partial class SavedQueryHubPage : ListPage
     private void BuildItems()
     {
         _itemsById.Clear();
+        _showedSetupPrompt = !_api.IsConfigured;
 
         if (!_api.IsConfigured)
         {
-            _items = [_settings.SettingsPrompt()];
+            _items = [_settings.SettingsPrompt(), Navigation.BackItem()];
             return;
         }
 
@@ -90,28 +92,27 @@ internal sealed partial class SavedQueryHubPage : ListPage
         }
 
         list.Add(BuildAddItem());
+        list.Add(Navigation.BackItem());
         _items = list.ToArray();
     }
 
+    // 追加項目。primary(Enter)=作成フォームのみ（コンテキストに AddContext を足すと同じ操作が二重に並ぶ）。
     private ListItem BuildAddItem()
     {
-        var item = new ListItem(new SavedQueryFormPage(_store))
+        var item = new ListItem(new SavedQueryFormPage(_store, _settings))
         {
-            Title = "＋ 保存クエリを追加",
+            Title = Strings.Queries.AddTitle,
             Icon = new IconInfo(""), // glyph:E710
         };
-        item.MoreCommands = [AddContext()];
         return item;
     }
 
     // Ctrl+N で保存クエリを追加（新規作成の慣例。Ctrl+A は検索ボックスの全選択と衝突するため使わない）。
     private CommandContextItem AddContext() =>
-        new(new SavedQueryFormPage(_store))
+        new(new SavedQueryFormPage(_store, _settings))
         {
-            Title = "保存クエリを追加",
-            RequestedShortcut = KeyChordHelpers.FromModifiers(
-                ctrl: true, alt: false, shift: false, win: false,
-                vkey: VirtualKey.N, scanCode: 0),
+            Title = Strings.Queries.AddTitle,
+            RequestedShortcut = Keybindings.AddQuery,
         };
 
     private ListItem BuildQueryItem(SavedQuery query)
@@ -126,54 +127,50 @@ internal sealed partial class SavedQueryHubPage : ListPage
 
         item.MoreCommands = [
             // Ctrl+Enter=ブラウザで開く（Redmine のフィルタ結果）
-            new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = "ブラウザで開く" })
+            new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = Strings.Common.OpenInBrowser })
             {
-                RequestedShortcut = KeyChordHelpers.FromModifiers(
-                    ctrl: true, alt: false, shift: false, win: false,
-                    vkey: VirtualKey.Enter, scanCode: 0),
+                RequestedShortcut = Keybindings.OpenInBrowser,
             },
 
             // Ctrl+R=件数を最新に更新
             new CommandContextItem(new AnonymousCommand(() => _ = FetchCountAsync(query, item))
             {
-                Name = "件数を最新に更新",
+                Name = Strings.Queries.RefreshCount,
                 Result = CommandResult.KeepOpen(),
             })
             {
-                RequestedShortcut = KeyChordHelpers.FromModifiers(
-                    ctrl: true, alt: false, shift: false, win: false,
-                    vkey: VirtualKey.R, scanCode: 0),
+                RequestedShortcut = Keybindings.Refresh,
             },
 
             AddContext(),
 
             // Ctrl+E=編集
-            new CommandContextItem(new SavedQueryFormPage(_store, query))
+            new CommandContextItem(new SavedQueryFormPage(_store, _settings, query))
             {
-                Title = "編集",
-                RequestedShortcut = KeyChordHelpers.FromModifiers(
-                    ctrl: true, alt: false, shift: false, win: false,
-                    vkey: VirtualKey.E, scanCode: 0),
+                Title = Strings.Common.Edit,
+                RequestedShortcut = Keybindings.EditQuery,
             },
 
             // トップレベルへの固定/解除（store.Changed で一覧と top-level が作り直される）。
             new CommandContextItem(new AnonymousCommand(() => TogglePin(query))
             {
-                Name = query.PinnedToTopLevel ? "トップレベルの固定を解除" : "トップレベルに固定",
+                Name = query.PinnedToTopLevel ? Strings.Queries.UnpinFromTopLevel : Strings.Queries.PinToTopLevel,
                 Result = CommandResult.KeepOpen(),
             }),
 
             // Ctrl+Delete=削除
             new CommandContextItem(new AnonymousCommand(() => _store.Remove(query.Id))
             {
-                Name = "削除",
+                Name = Strings.Common.Delete,
                 Result = CommandResult.KeepOpen(),
             })
             {
-                RequestedShortcut = KeyChordHelpers.FromModifiers(
-                    ctrl: true, alt: false, shift: false, win: false,
-                    vkey: VirtualKey.Delete, scanCode: 0),
+                RequestedShortcut = Keybindings.DeleteQuery,
             },
+
+            // Alt+←=前のページへ戻る。
+            Navigation.BackContext(),
+            Navigation.HomeContext(),
         ];
 
         return item;
@@ -214,8 +211,9 @@ internal sealed partial class SavedQueryHubPage : ListPage
         _lastRefreshUtc = now;
 
         // 最も更新の古いもの（未取得=null を最優先）から取得する。
+        var ttl = _settings.CountTtl;
         var stale = _store.All
-            .Where(q => q.CountUpdatedUtc is null || now - q.CountUpdatedUtc.Value > CountTtl)
+            .Where(q => q.CountUpdatedUtc is null || now - q.CountUpdatedUtc.Value > ttl)
             .OrderBy(q => q.CountUpdatedUtc ?? DateTime.MinValue)
             .ToList();
         if (stale.Count == 0)

@@ -18,7 +18,7 @@ internal sealed partial class OpenTicketCommand : InvokableCommand
         _id = id;
         _titleProvider = titleProvider;
         _history = history;
-        Name = "ブラウザで開く";
+        Name = Strings.Common.OpenInBrowser;
         Icon = new IconInfo(""); // Globe
     }
 

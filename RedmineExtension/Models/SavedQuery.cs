@@ -57,6 +57,12 @@ internal sealed class SavedQuery
     /// </summary>
     public string? RawQuery { get; set; }
 
+    /// <summary>
+    /// このクエリ専用の詳細ペイン表示項目（TicketDetails.Fields のキー）。
+    /// null なら拡張設定の既定値に従う。
+    /// </summary>
+    public List<string>? DetailFields { get; set; }
+
     /// <summary>直近に取得したチケット件数と取得時刻(UTC)。ハブ表示・件数キャッシュに使う。</summary>
     public int? Count { get; set; }
 

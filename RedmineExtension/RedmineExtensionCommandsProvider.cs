@@ -27,7 +27,11 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
         DisplayName = "Redmine";
         Icon = new IconInfo(""); // glyph:E8FD
 
-        _settings = new SettingsManager();
+        // カスタマイズ（キーバインド上書き等）は他の全構築より先に読み込む。
+        var uiConfig = new UiConfigStore();
+        Keybindings.Configure(uiConfig);
+
+        _settings = new SettingsManager(uiConfig);
         Settings = _settings.Settings;
         _api = new RedmineApi(_settings);
         _history = new TicketHistory(_settings.MaxHistoryRetained);
@@ -35,7 +39,7 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
 
         // ページはセッションで共有する（キャッシュ・状態を保つ）。ハブは番号検索ページからも遷移できる。
         _hub = new SavedQueryHubPage(_store, _api, _history, _settings);
-        _mainPage = new RedmineExtensionPage(_settings, _api, _history, _hub);
+        _mainPage = new RedmineExtensionPage(_settings, _api, _history, _hub, new CustomizePage(uiConfig, _settings));
 
         // 保存クエリの追加/削除/固定変更で top-level を更新する（名前等も変わるため作り直す）。
         _store.Changed += (_, _) =>
@@ -74,8 +78,8 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
         // 保存クエリのハブ（常に表示。中で 追加(Ctrl+N)・件数・一覧・編集/削除・固定切替）。
         commands.Add(new CommandItem(_hub)
         {
-            Title = "保存クエリ",
-            Subtitle = "保存クエリの一覧・件数・追加",
+            Title = Strings.Queries.HubTitle,
+            Subtitle = Strings.Queries.HubSubtitle,
             Icon = new IconInfo(""), // glyph:E71C
         });
 
@@ -92,32 +96,26 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
             Icon = new IconInfo(""), // glyph:E71C
             MoreCommands = [
                 // Ctrl+Enter=ブラウザで開く（Redmine のフィルタ結果）
-                new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = "ブラウザで開く" })
+                new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = Strings.Common.OpenInBrowser })
                 {
-                    RequestedShortcut = KeyChordHelpers.FromModifiers(
-                        ctrl: true, alt: false, shift: false, win: false,
-                        vkey: VirtualKey.Enter, scanCode: 0),
+                    RequestedShortcut = Keybindings.OpenInBrowser,
                 },
 
                 // Ctrl+R=件数を最新に更新（トップレベルからも件数を更新できるように）
                 new CommandContextItem(new AnonymousCommand(() => _ = RefreshCountAsync(query))
                 {
-                    Name = "件数を最新に更新",
+                    Name = Strings.Queries.RefreshCount,
                     Result = CommandResult.KeepOpen(),
                 })
                 {
-                    RequestedShortcut = KeyChordHelpers.FromModifiers(
-                        ctrl: true, alt: false, shift: false, win: false,
-                        vkey: VirtualKey.R, scanCode: 0),
+                    RequestedShortcut = Keybindings.Refresh,
                 },
 
                 // Ctrl+E=編集
-                new CommandContextItem(new SavedQueryFormPage(_store, query))
+                new CommandContextItem(new SavedQueryFormPage(_store, _settings, query))
                 {
-                    Title = "編集",
-                    RequestedShortcut = KeyChordHelpers.FromModifiers(
-                        ctrl: true, alt: false, shift: false, win: false,
-                        vkey: VirtualKey.E, scanCode: 0),
+                    Title = Strings.Common.Edit,
+                    RequestedShortcut = Keybindings.EditQuery,
                 },
 
                 // 固定を解除（top-level から外す。クエリ自体は残る）。
@@ -127,20 +125,18 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
                     _store.AddOrUpdate(query);
                 })
                 {
-                    Name = "トップレベルの固定を解除",
+                    Name = Strings.Queries.UnpinFromTopLevel,
                     Result = CommandResult.KeepOpen(),
                 }),
                 new CommandContextItem(new AnonymousCommand(() => _store.Remove(query.Id))
                 {
-                    Name = "削除",
+                    Name = Strings.Common.Delete,
                     Icon = new IconInfo(""), // glyph:E74D
                     Result = CommandResult.GoHome(),
                 })
                 {
                     // Ctrl+Delete=削除
-                    RequestedShortcut = KeyChordHelpers.FromModifiers(
-                        ctrl: true, alt: false, shift: false, win: false,
-                        vkey: VirtualKey.Delete, scanCode: 0),
+                    RequestedShortcut = Keybindings.DeleteQuery,
                 },
             ],
         };

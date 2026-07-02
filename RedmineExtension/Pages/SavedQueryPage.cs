@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
@@ -40,12 +41,12 @@ internal sealed partial class SavedQueryPage : ListPage
         _store = store;
 
         Title = query.Name;
-        Name = "開く";
+        Name = Strings.Common.Open;
         Icon = new IconInfo(""); // glyph:E71C
-        PlaceholderText = "クエリでファジー絞り込み";
+        PlaceholderText = Strings.Queries.ResultsPlaceholder;
         ShowDetails = true; // フォーカス時に右ペインの詳細を表示する
 
-        _items = [new ListItem(new NoOpCommand()) { Title = "読み込み中…" }];
+        _items = [new ListItem(new NoOpCommand()) { Title = Strings.Common.Loading }];
     }
 
     public override IListItem[] GetItems()
@@ -57,7 +58,18 @@ internal sealed partial class SavedQueryPage : ListPage
             _ = LoadAsync(append: false);
         }
 
-        return _items;
+        // 「戻る」は追記(ページング)後も常に最後に来るようここで合成する。
+        return [.. _items, _backItem];
+    }
+
+    // 末尾に固定表示する「戻る」項目（同一インスタンス再利用でフォーカスのちらつきを防ぐ）。
+    private readonly IListItem _backItem = Navigation.BackItem();
+
+    // 失敗後などに間隔を待たず再取得する（Enter=再試行から）。
+    private void ForceReload()
+    {
+        _loadedAtUtc = DateTime.MinValue;
+        RaiseItemsChanged(); // GetItems が呼ばれ、即 LoadAsync が走る。
     }
 
     // 末尾までスクロールしたら次のページを追記する（HasMoreItems が true の間ホストが呼ぶ）。
@@ -81,13 +93,11 @@ internal sealed partial class SavedQueryPage : ListPage
     private CommandContextItem LoadMoreContext() =>
         new(new AnonymousCommand(LoadNextPage)
         {
-            Name = "さらに読み込む",
+            Name = Strings.Queries.LoadMore,
             Result = CommandResult.KeepOpen(),
         })
         {
-            RequestedShortcut = KeyChordHelpers.FromModifiers(
-                ctrl: true, alt: false, shift: false, win: false,
-                vkey: VirtualKey.L, scanCode: 0),
+            RequestedShortcut = Keybindings.LoadMore,
         };
 
     private async Task LoadAsync(bool append)
@@ -117,10 +127,10 @@ internal sealed partial class SavedQueryPage : ListPage
                 _issueCount = issues.Count;
                 _items = issues.Count == 0
                     ? [
-                        new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)) { Name = "ブラウザで開く" })
+                        new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)) { Name = Strings.Common.OpenInBrowser })
                         {
-                            Title = "該当チケットなし",
-                            Subtitle = "Enter で Redmine の一覧をブラウザで開く",
+                            Title = Strings.Queries.NoMatches,
+                            Subtitle = Strings.Queries.OpenListHint,
                         },
                       ]
                     : issues.Select(BuildIssueItem).ToArray();
@@ -131,11 +141,24 @@ internal sealed partial class SavedQueryPage : ListPage
         }
         catch (Exception ex)
         {
+            // Enter=再試行（設定を直した後の確実な復帰手段）。ブラウザはコンテキストへ。
             _items = [
-                new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)) { Name = "ブラウザで開く" })
+                new ListItem(new AnonymousCommand(ForceReload)
                 {
-                    Title = $"取得に失敗: {ex.Message}",
-                    Subtitle = "Enter で Redmine の一覧をブラウザで開く",
+                    Name = Strings.Common.Retry,
+                    Result = CommandResult.KeepOpen(),
+                })
+                {
+                    Title = Strings.Common.FailedToLoad(ex.Message),
+                    Subtitle = Strings.Common.RetryHint,
+                    MoreCommands = [
+                        new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)) { Name = Strings.Common.OpenInBrowser })
+                        {
+                            RequestedShortcut = Keybindings.OpenInBrowser,
+                        },
+                        Navigation.BackContext(),
+                        Navigation.HomeContext(),
+                    ],
                 },
             ];
             HasMoreItems = false;
@@ -149,6 +172,10 @@ internal sealed partial class SavedQueryPage : ListPage
         }
     }
 
+    // このクエリの詳細ペイン表示項目（クエリのローカル設定 > 拡張設定の既定値）。
+    private IReadOnlyCollection<string> DetailFields =>
+        _query.DetailFields ?? _settings.DefaultDetailFields;
+
     private IListItem BuildIssueItem(IssueSummary issue)
     {
         var url = _api.IssueUrl(issue.Id);
@@ -159,7 +186,7 @@ internal sealed partial class SavedQueryPage : ListPage
         {
             Title = $"#{issue.Id} {subject}",
             Subtitle = TicketDetails.Subtitle(issue),
-            Details = TicketDetails.Build(issue, url),
+            Details = TicketDetails.Build(issue, url, DetailFields),
             Icon = new IconInfo(""), // glyph:E774
         };
 
@@ -167,33 +194,35 @@ internal sealed partial class SavedQueryPage : ListPage
             // Ctrl+Enter=ブラウザで開く。
             new CommandContextItem(new OpenTicketCommand(url, issue.Id, () => subject, _history))
             {
-                RequestedShortcut = KeyChordHelpers.FromModifiers(
-                    ctrl: true, alt: false, shift: false, win: false,
-                    vkey: VirtualKey.Enter, scanCode: 0),
+                RequestedShortcut = Keybindings.OpenInBrowser,
             },
 
             // Ctrl+C=リンクをコピー（Windows のコピー慣例）。
             new CommandContextItem(new CopyTicketLinkCommand(_api, issue.Id, _history))
             {
-                RequestedShortcut = KeyChordHelpers.FromModifiers(
-                    ctrl: true, alt: false, shift: false, win: false,
-                    vkey: VirtualKey.C, scanCode: 0),
+                RequestedShortcut = Keybindings.CopyLink,
             },
 
             // Ctrl+R=このチケットだけ最新に更新（その場で表示を差し替え）。
             new CommandContextItem(new AnonymousCommand(() => _ = RefreshIssueAsync(issue.Id, item))
             {
-                Name = "最新に更新",
+                Name = Strings.Common.Refresh,
                 Result = CommandResult.KeepOpen(),
             })
             {
-                RequestedShortcut = KeyChordHelpers.FromModifiers(
-                    ctrl: true, alt: false, shift: false, win: false,
-                    vkey: VirtualKey.R, scanCode: 0),
+                RequestedShortcut = Keybindings.Refresh,
             },
 
             // Ctrl+L=さらに読み込む（どの項目からでも次ページを取得できる）。
             LoadMoreContext(),
+
+            // Ctrl+S=ステータス変更 / Ctrl+M=コメント追加（簡易編集）。
+            TicketEdit.StatusContext(_api, issue.Id),
+            TicketEdit.AddCommentContext(_api, issue.Id),
+
+            // Alt+←=前のページへ戻る。
+            Navigation.BackContext(),
+            Navigation.HomeContext(),
         ];
 
         return item;
@@ -207,7 +236,7 @@ internal sealed partial class SavedQueryPage : ListPage
             var issue = await _api.GetIssueAsync(id).ConfigureAwait(false);
             item.Title = $"#{issue.Id} {issue.Subject}";
             item.Subtitle = TicketDetails.Subtitle(issue);
-            item.Details = TicketDetails.Build(issue, _api.IssueUrl(issue.Id));
+            item.Details = TicketDetails.Build(issue, _api.IssueUrl(issue.Id), DetailFields);
         }
         catch
         {
