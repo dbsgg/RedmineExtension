@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using Windows.System;
 
 namespace RedmineExtension;
 
@@ -17,28 +18,33 @@ namespace RedmineExtension;
 /// </summary>
 internal sealed partial class CommentsPage : ListPage
 {
-    // id → 直近取得したスレッド（セッション内で共有。ページは Ctrl+C ごとに作り直されるため static）。
+    // id → 直近取得したスレッド（セッション内で共有。ページは項目ごとに作り直されるため static）。
     private static readonly ConcurrentDictionary<int, IssueThread> Cache = new();
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
 
     private readonly int _id;
     private readonly RedmineApi _api;
+    private readonly TicketHistory _history;
+    private readonly Func<string?> _titleProvider;
 
     private IListItem[] _items;
     private DateTime _loadedAtUtc = DateTime.MinValue;
     private bool _loading;
+    private bool _recorded;
 
-    public CommentsPage(int id, RedmineApi api)
+    public CommentsPage(int id, RedmineApi api, TicketHistory history, Func<string?> titleProvider)
     {
         _id = id;
         _api = api;
+        _history = history;
+        _titleProvider = titleProvider;
 
         Id = $"redmine-comments-{id}";
-        Title = $"#{id} のコメント";
-        Name = "Open";
-        Icon = new IconInfo(""); // glyph:E90A
-        PlaceholderText = "コメントを絞り込み";
+        Title = $"#{id} の説明・コメント";
+        Name = "コメントを表示";
+        Icon = new IconInfo(""); // glyph:E90A
+        PlaceholderText = "説明・コメントを絞り込み";
         ShowDetails = true;
 
         // キャッシュがあれば即表示（無ければ読み込み中）。いずれも開いた際に裏で更新する。
@@ -49,6 +55,13 @@ internal sealed partial class CommentsPage : ListPage
 
     public override IListItem[] GetItems()
     {
+        // ページを実際に開いたタイミングで履歴に記録する（Enter=遷移が主操作のため）。
+        if (!_recorded)
+        {
+            _recorded = true;
+            _history.Record(_id, _titleProvider());
+        }
+
         if (!_loading && DateTime.UtcNow - _loadedAtUtc > RefreshInterval)
         {
             _loading = true;
@@ -83,10 +96,10 @@ internal sealed partial class CommentsPage : ListPage
         catch (Exception ex)
         {
             _items = [
-                new ListItem(new OpenUrlCommand(_api.IssueUrl(_id)))
+                new ListItem(new OpenUrlCommand(_api.IssueUrl(_id)) { Name = "ブラウザで開く" })
                 {
                     Title = $"取得に失敗: {ex.Message}",
-                    Subtitle = "Redmine で開く",
+                    Subtitle = "Enter でチケットをブラウザで開く",
                 },
             ];
             RaiseItemsChanged();
@@ -113,7 +126,7 @@ internal sealed partial class CommentsPage : ListPage
         }
 
         return items.Count == 0
-            ? [new ListItem(new OpenUrlCommand(_api.IssueUrl(_id))) { Title = "説明・コメントなし", Subtitle = "Redmine で開く" }]
+            ? [new ListItem(new OpenUrlCommand(_api.IssueUrl(_id)) { Name = "ブラウザで開く" }) { Title = "説明・コメントなし", Subtitle = "Enter でチケットをブラウザで開く" }]
             : items.ToArray();
     }
 
@@ -124,7 +137,7 @@ internal sealed partial class CommentsPage : ListPage
         var detailByline = Append(author, FormatDate(entry.CreatedOn, withTime: true));
         var isDescription = kind == "説明";
 
-        return new ListItem(new OpenUrlCommand(_api.IssueUrl(_id)))
+        return new ListItem(new OpenUrlCommand(_api.IssueUrl(_id)) { Name = "ブラウザで開く" })
         {
             Title = titleByline,
             Subtitle = isDescription ? $"【説明】 {Snippet(entry.Notes)}" : Snippet(entry.Notes),
@@ -133,7 +146,16 @@ internal sealed partial class CommentsPage : ListPage
                 Title = $"#{_id} の{kind}",
                 Body = $"{entry.Notes}\n\n— {detailByline}",
             },
-            Icon = new IconInfo(""), // glyph:E90A
+            MoreCommands = [
+                // Ctrl+C=リンクをコピー（チケットのリッチリンク）。
+                new CommandContextItem(new CopyTicketLinkCommand(_api, _id, _history))
+                {
+                    RequestedShortcut = KeyChordHelpers.FromModifiers(
+                        ctrl: true, alt: false, shift: false, win: false,
+                        vkey: VirtualKey.C, scanCode: 0),
+                },
+            ],
+            Icon = new IconInfo(""), // glyph:E90A
         };
     }
 

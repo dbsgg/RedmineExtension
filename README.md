@@ -7,10 +7,23 @@ extension for working with [Redmine](https://www.redmine.org/) without leaving t
 
 ## Features
 
-- **Open an issue by number** — type a ticket number (a leading `#` is allowed) and press Enter to open it in your browser.
-- **Copy a link** — press Ctrl+Enter to copy a rich `#<id> <title>` hyperlink to the clipboard (a clickable link in Teams/Outlook/Word; plain text elsewhere).
-- **Recent history** — recently opened/copied tickets are listed when the search box is empty. The count is configurable.
-- **Saved (custom) searches** — create searches filtered by project, tracker, status, and assignee. Each appears as a top-level command in either *list* mode (fuzzy-filter the results) or *count* mode (show the number of matching issues).
+- **Find an issue by number** — type a ticket number (a leading `#` is allowed). Enter shows the issue's description and comments; details appear in the right pane.
+- **Recent history** — recently viewed/opened/copied tickets are listed when the search box is empty. The count is configurable.
+- **Saved queries** — paste a Redmine `query_id`, a raw filter query, or a URL to save it. The *Saved queries* hub lists each query with its cached issue count; individual queries can be pinned as top-level commands.
+- **Large result sets** — query results load 100 issues at a time; scrolling to the end of the list fetches the next page automatically, or press Ctrl+L on any item to load the next page explicitly.
+
+### Keyboard scheme (consistent across pages)
+
+| Key | Action |
+|-----|--------|
+| Enter | Navigate: ticket → description & comments page, saved query → result list |
+| Ctrl+Enter | Open in browser (ticket page / Redmine filter results) |
+| Ctrl+C | Copy a rich `#<id> <title>` hyperlink (clickable in Teams/Outlook/Word; plain text elsewhere) |
+| Ctrl+R | Refresh (re-fetch the ticket / update the query count) |
+| Ctrl+L | Load the next page of query results |
+| Ctrl+N | Add a saved query |
+| Ctrl+E | Edit the saved query |
+| Ctrl+Delete | Delete the saved query |
 
 ## Configuration
 

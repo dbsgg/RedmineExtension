@@ -90,6 +90,10 @@ internal sealed class SavedQueryStore
 
     public event EventHandler? Changed;
 
+    /// <summary>件数の記録が更新されたとき。表示中の項目タイトルをその場で差し替える用途
+    /// （Changed と違い top-level の作り直しを伴わない）。</summary>
+    public event EventHandler? CountChanged;
+
     public IReadOnlyList<SavedQuery> All
     {
         get
@@ -133,7 +137,8 @@ internal sealed class SavedQueryStore
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>件数を記録する(永続化)。Changed は発火しない(top-level 再構築を避けるため)。</summary>
+    /// <summary>件数を記録する(永続化)。Changed は発火しない(top-level 再構築を避けるため)。
+    /// 代わりに CountChanged を発火し、表示側はタイトルのみ差し替える。</summary>
     public void UpdateCount(string id, int count)
     {
         lock (_lock)
@@ -148,6 +153,8 @@ internal sealed class SavedQueryStore
             query.CountUpdatedUtc = DateTime.UtcNow;
             Save();
         }
+
+        CountChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private List<SavedQuery> Load()

@@ -55,21 +55,43 @@ These are non-negotiable; violating them breaks the build gate or the security m
   Keep new UI strings and comments consistent with that. Identifiers, types, and this file stay in English.
 - **Segoe Fluent icon glyphs — use the marker workaround.** Icon glyphs are private-use codepoints
   (e.g. `U+E90A`) that the file-editing tools tend to mangle. The established pattern:
-  write `new IconInfo("") // glyph:E90A` (empty string + a `// glyph:XXXX` marker), then insert the
-  real character with PowerShell, e.g.:
+  write `new IconInfo("")` followed by a `// glyph:XXXX` marker (any `;`/`,` in between is fine),
+  then insert the real character with PowerShell. This regex version fills **all** markers in a file
+  regardless of the separator — prefer it over a literal `.Replace`, which silently misses
+  `IconInfo("");` / `IconInfo(""),` variants:
   ```powershell
-  $g = [string][char]0xE90A
-  (Get-Content $f -Raw).Replace('IconInfo("") // glyph:E90A', 'IconInfo("' + $g + '") // glyph:E90A') |
+  $ev = { param($m) 'IconInfo("' + [string][char][Convert]::ToInt32($m.Groups['code'].Value,16) +
+         '")' + $m.Groups['sep'].Value + ' // glyph:' + $m.Groups['code'].Value }
+  $raw = Get-Content $f -Raw -Encoding utf8
+  [regex]::Replace($raw, 'IconInfo\(""\)(?<sep>[;,]?)\s*// glyph:(?<code>[0-9A-Fa-f]{4})', $ev) |
     Set-Content $f -NoNewline -Encoding utf8
   ```
-  After editing, confirm no `IconInfo("") // glyph` markers remain.
+  After editing, verify no empty markers remain anywhere:
+  ```powershell
+  Get-ChildItem RedmineExtension -Recurse -Filter *.cs |
+    Where-Object FullName -notmatch '\\(bin|obj)\\' | Select-String 'IconInfo\(""\)'
+  ```
+  (no output = OK).
 - **Be gentle on the Redmine server.** One static `HttpClient` (10s timeout). Cache and throttle:
   TTL caches (saved-query counts ~30 min, refreshed oldest-first with ~500 ms spacing), batch
-  multi-ticket fetches via `issue_id=1,2,3`, and a per-session comments cache. Prefer adding to an
-  existing cache over issuing new round-trips.
+  multi-ticket fetches via `issue_id=1,2,3`, a per-session comments cache, and paged result
+  fetches (`SavedQueryPage`: `LoadMore()`/`HasMoreItems`, 100 issues per request via
+  `offset`). Prefer adding to an existing cache over issuing new round-trips.
+- **Two store events with different costs.** `SavedQueryStore.Changed` (add/edit/remove/pin)
+  rebuilds top-level commands and hub items; `SavedQueryStore.CountChanged` (fired by
+  `UpdateCount`) must only patch item titles in place — never trigger a rebuild from it,
+  or list focus resets and pinned pages lose state.
 - **Navigation to a page** is done by using the page as an `ICommand` (`new ListItem(page)` /
   `new CommandContextItem(page)`); shortcuts use
   `KeyChordHelpers.FromModifiers(ctrl, alt, shift, win, VirtualKey, scanCode)` (**6 args**).
+- **Unified keybinding scheme.** Keep new commands consistent with this; don't rebind these keys:
+  **Enter** = navigate to a page (ticket → comments page, query → result list; leaf items such as
+  comment rows may open the browser instead), **Ctrl+Enter** = open in browser,
+  **Ctrl+C** = copy rich link, **Ctrl+R** = refresh (ticket / query count),
+  **Ctrl+L** = load the next result page, **Ctrl+N** = add saved query,
+  **Ctrl+E** = edit, **Ctrl+Delete** = delete.
+  Avoid Ctrl+A (conflicts with select-all in the search box). Browser-opening commands are
+  uniformly named 「ブラウザで開く」.
 - **Keep git history linear.** Work on a feature branch, squash into a coherent commit
   (`git merge --squash` or `git reset --soft main`), then fast-forward into `main`. Avoid merge branches.
 
@@ -92,10 +114,12 @@ if `LocalState` is unavailable (unpackaged run), state degrades to in-memory onl
 
 ## Known issues
 
-- **Comments page needs Esc twice** to return to the list. Comments are reached via a *context*
-  command (Ctrl+C) whose command is a page; CmdPal appears to push an extra navigation frame in that
-  case (primary/Enter navigation does not). Not yet resolved from the agent side; a possible future fix
-  is explicit `CommandResult.GoToPage(NavigationMode.Push)`, which needs live-palette verification.
+- **Comments page needed Esc twice** to return to the list when reached via a *context* command
+  (the old Ctrl+C binding); CmdPal appears to push an extra navigation frame for context-command
+  pages (primary/Enter navigation does not). The comments page is now the *primary* command of
+  ticket items (Enter), so the issue should no longer be reachable — **needs live-palette
+  verification**. If a context command ever navigates to a page again, expect this to resurface;
+  a possible fix is explicit `CommandResult.GoToPage(NavigationMode.Push)`.
 
 ## More docs
 

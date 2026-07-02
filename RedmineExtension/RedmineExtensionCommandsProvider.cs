@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using Windows.System;
@@ -15,6 +16,11 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
     private readonly RedmineApi _api;
     private readonly TicketHistory _history;
     private readonly SavedQueryStore _store;
+    private readonly SavedQueryHubPage _hub;
+    private readonly RedmineExtensionPage _mainPage;
+
+    // queryId → 固定表示中の top-level 項目。件数更新でタイトルだけ差し替えるため再利用する。
+    private readonly Dictionary<string, CommandItem> _pinnedItems = new();
 
     public RedmineExtensionCommandsProvider()
     {
@@ -27,28 +33,46 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
         _history = new TicketHistory(_settings.MaxHistoryRetained);
         _store = new SavedQueryStore();
 
-        // 保存クエリの追加/削除/固定変更で top-level を更新する。
-        _store.Changed += (_, _) => RaiseItemsChanged();
+        // ページはセッションで共有する（キャッシュ・状態を保つ）。ハブは番号検索ページからも遷移できる。
+        _hub = new SavedQueryHubPage(_store, _api, _history, _settings);
+        _mainPage = new RedmineExtensionPage(_settings, _api, _history, _hub);
+
+        // 保存クエリの追加/削除/固定変更で top-level を更新する（名前等も変わるため作り直す）。
+        _store.Changed += (_, _) =>
+        {
+            _pinnedItems.Clear();
+            RaiseItemsChanged();
+        };
+
+        // 件数の記録更新は固定項目のタイトルへその場反映する（一覧ページを開いた時なども含む）。
+        _store.CountChanged += (_, _) => SyncPinnedTitles();
     }
 
     public override ICommandItem[] TopLevelCommands()
     {
         var commands = new List<ICommandItem>
         {
-            new CommandItem(new RedmineExtensionPage(_settings, _api, _history)) { Title = DisplayName },
+            new CommandItem(_mainPage) { Title = DisplayName },
         };
 
         // top-level に固定されたクエリを個別コマンドとして並べる（固定はクエリごと）。
+        // 項目は再利用し、件数変化は CountChanged 経由でタイトルのみ更新する。
         foreach (var query in _store.All)
         {
             if (query.PinnedToTopLevel)
             {
-                commands.Add(BuildQueryTopLevel(query));
+                if (!_pinnedItems.TryGetValue(query.Id, out var item))
+                {
+                    item = BuildQueryTopLevel(query);
+                    _pinnedItems[query.Id] = item;
+                }
+
+                commands.Add(item);
             }
         }
 
-        // 保存クエリのハブ（常に表示。中で 追加(Ctrl+A)・件数・一覧・編集/削除・固定切替）。
-        commands.Add(new CommandItem(new SavedQueryHubPage(_store, _api, _history, _settings))
+        // 保存クエリのハブ（常に表示。中で 追加(Ctrl+N)・件数・一覧・編集/削除・固定切替）。
+        commands.Add(new CommandItem(_hub)
         {
             Title = "保存クエリ",
             Subtitle = "保存クエリの一覧・件数・追加",
@@ -58,7 +82,7 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
         return commands.ToArray();
     }
 
-    // 固定クエリの top-level コマンド（Enter=一覧 / Ctrl+Enter=Redmine / 固定解除・編集・削除）。
+    // 固定クエリの top-level コマンド（Enter=一覧 / Ctrl+Enter=ブラウザ / 編集・固定解除・削除）。
     private CommandItem BuildQueryTopLevel(SavedQuery query)
     {
         return new CommandItem(new SavedQueryPage(query, _api, _history, _settings, _store))
@@ -67,20 +91,84 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
             Subtitle = SavedQueryText.Describe(query),
             Icon = new IconInfo(""), // glyph:E71C
             MoreCommands = [
-                new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = "Redmine で開く" })
+                // Ctrl+Enter=ブラウザで開く（Redmine のフィルタ結果）
+                new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = "ブラウザで開く" })
                 {
                     RequestedShortcut = KeyChordHelpers.FromModifiers(
                         ctrl: true, alt: false, shift: false, win: false,
                         vkey: VirtualKey.Enter, scanCode: 0),
                 },
-                new CommandContextItem(new SavedQueryFormPage(_store, query)) { Title = "編集" },
+
+                // Ctrl+R=件数を最新に更新（トップレベルからも件数を更新できるように）
+                new CommandContextItem(new AnonymousCommand(() => _ = RefreshCountAsync(query))
+                {
+                    Name = "件数を最新に更新",
+                    Result = CommandResult.KeepOpen(),
+                })
+                {
+                    RequestedShortcut = KeyChordHelpers.FromModifiers(
+                        ctrl: true, alt: false, shift: false, win: false,
+                        vkey: VirtualKey.R, scanCode: 0),
+                },
+
+                // Ctrl+E=編集
+                new CommandContextItem(new SavedQueryFormPage(_store, query))
+                {
+                    Title = "編集",
+                    RequestedShortcut = KeyChordHelpers.FromModifiers(
+                        ctrl: true, alt: false, shift: false, win: false,
+                        vkey: VirtualKey.E, scanCode: 0),
+                },
+
+                // 固定を解除（top-level から外す。クエリ自体は残る）。
+                new CommandContextItem(new AnonymousCommand(() =>
+                {
+                    query.PinnedToTopLevel = false;
+                    _store.AddOrUpdate(query);
+                })
+                {
+                    Name = "トップレベルの固定を解除",
+                    Result = CommandResult.KeepOpen(),
+                }),
                 new CommandContextItem(new AnonymousCommand(() => _store.Remove(query.Id))
                 {
                     Name = "削除",
                     Icon = new IconInfo(""), // glyph:E74D
                     Result = CommandResult.GoHome(),
-                }),
+                })
+                {
+                    // Ctrl+Delete=削除
+                    RequestedShortcut = KeyChordHelpers.FromModifiers(
+                        ctrl: true, alt: false, shift: false, win: false,
+                        vkey: VirtualKey.Delete, scanCode: 0),
+                },
             ],
         };
+    }
+
+    // 件数の記録更新を、固定表示中の top-level 項目のタイトルへその場反映する。
+    private void SyncPinnedTitles()
+    {
+        foreach (var query in _store.All)
+        {
+            if (_pinnedItems.TryGetValue(query.Id, out var item))
+            {
+                item.Title = SavedQueryText.Title(query);
+            }
+        }
+    }
+
+    // 件数を再取得して記録する（UpdateCount → CountChanged 経由で表示が追従する）。
+    private async Task RefreshCountAsync(SavedQuery query)
+    {
+        try
+        {
+            var (_, total) = await _api.SearchIssuesAsync(query, 1).ConfigureAwait(false);
+            _store.UpdateCount(query.Id, total);
+        }
+        catch
+        {
+            // 取得失敗は無視（前回値のまま）。
+        }
     }
 }

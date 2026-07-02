@@ -123,10 +123,10 @@ internal sealed class RedmineApi
             Description: Str("description"));
     }
 
-    /// <summary>クエリに合致するチケットを取得する。件数モード用に total_count も返す。</summary>
-    public async Task<(IReadOnlyList<IssueSummary> Issues, int TotalCount)> SearchIssuesAsync(SavedQuery query, int limit)
+    /// <summary>クエリに合致するチケットを取得する。offset でページ取得できる。total_count も返す。</summary>
+    public async Task<(IReadOnlyList<IssueSummary> Issues, int TotalCount)> SearchIssuesAsync(SavedQuery query, int limit, int offset = 0)
     {
-        var url = $"{_settings.ServerUrl}/issues.json?{EffectiveQuery(query)}&limit={limit}";
+        var url = $"{_settings.ServerUrl}/issues.json?{EffectiveQuery(query)}&limit={limit}&offset={offset}";
         using var doc = await GetAsync(url).ConfigureAwait(false);
 
         var total = doc.RootElement.TryGetProperty("total_count", out var tc) ? tc.GetInt32() : 0;

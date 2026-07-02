@@ -18,7 +18,7 @@ internal sealed partial class OpenTicketCommand : InvokableCommand
         _id = id;
         _titleProvider = titleProvider;
         _history = history;
-        Name = "開く";
+        Name = "ブラウザで開く";
         Icon = new IconInfo(""); // Globe
     }
 

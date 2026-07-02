@@ -10,7 +10,8 @@ namespace RedmineExtension;
 
 /// <summary>
 /// 保存クエリのハブ。全クエリを「{名前}: {N}件」で一覧表示する。
-/// Enter で一覧ページへ、Ctrl+Enter で Redmine を開く。Ctrl+R でその件数を更新。
+/// Enter で一覧ページへ、Ctrl+Enter でブラウザで開く。Ctrl+R で件数更新、
+/// Ctrl+N で追加、Ctrl+E で編集、Ctrl+Delete で削除。固定切替はコンテキストから。
 /// 件数は記録値を即表示し、古い(TTL超過)ものだけ開いた際に裏で再取得する。
 /// </summary>
 internal sealed partial class SavedQueryHubPage : ListPage
@@ -43,9 +44,9 @@ internal sealed partial class SavedQueryHubPage : ListPage
         _settings = settings;
 
         Title = "保存クエリ";
-        Name = "Open";
+        Name = "開く";
         Icon = new IconInfo(""); // glyph:E71C
-        PlaceholderText = "保存クエリを選択（Ctrl+A で追加）";
+        PlaceholderText = "保存クエリを選択（Ctrl+N で追加）";
 
         _items = [new ListItem(new NoOpCommand()) { Title = "読み込み中…" }];
 
@@ -103,14 +104,14 @@ internal sealed partial class SavedQueryHubPage : ListPage
         return item;
     }
 
-    // Ctrl+A で保存クエリを追加（ハブのどの項目からでも）。
+    // Ctrl+N で保存クエリを追加（新規作成の慣例。Ctrl+A は検索ボックスの全選択と衝突するため使わない）。
     private CommandContextItem AddContext() =>
         new(new SavedQueryFormPage(_store))
         {
             Title = "保存クエリを追加",
             RequestedShortcut = KeyChordHelpers.FromModifiers(
                 ctrl: true, alt: false, shift: false, win: false,
-                vkey: VirtualKey.A, scanCode: 0),
+                vkey: VirtualKey.N, scanCode: 0),
         };
 
     private ListItem BuildQueryItem(SavedQuery query)
@@ -124,18 +125,18 @@ internal sealed partial class SavedQueryHubPage : ListPage
         };
 
         item.MoreCommands = [
-            // Ctrl+Enter=Redmine を開く
-            new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = "Redmine で開く" })
+            // Ctrl+Enter=ブラウザで開く（Redmine のフィルタ結果）
+            new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = "ブラウザで開く" })
             {
                 RequestedShortcut = KeyChordHelpers.FromModifiers(
                     ctrl: true, alt: false, shift: false, win: false,
                     vkey: VirtualKey.Enter, scanCode: 0),
             },
 
-            // Ctrl+R=件数を更新
+            // Ctrl+R=件数を最新に更新
             new CommandContextItem(new AnonymousCommand(() => _ = FetchCountAsync(query, item))
             {
-                Name = "件数を更新",
+                Name = "件数を最新に更新",
                 Result = CommandResult.KeepOpen(),
             })
             {
@@ -145,15 +146,44 @@ internal sealed partial class SavedQueryHubPage : ListPage
             },
 
             AddContext(),
-            new CommandContextItem(new SavedQueryFormPage(_store, query)) { Title = "編集" },
+
+            // Ctrl+E=編集
+            new CommandContextItem(new SavedQueryFormPage(_store, query))
+            {
+                Title = "編集",
+                RequestedShortcut = KeyChordHelpers.FromModifiers(
+                    ctrl: true, alt: false, shift: false, win: false,
+                    vkey: VirtualKey.E, scanCode: 0),
+            },
+
+            // トップレベルへの固定/解除（store.Changed で一覧と top-level が作り直される）。
+            new CommandContextItem(new AnonymousCommand(() => TogglePin(query))
+            {
+                Name = query.PinnedToTopLevel ? "トップレベルの固定を解除" : "トップレベルに固定",
+                Result = CommandResult.KeepOpen(),
+            }),
+
+            // Ctrl+Delete=削除
             new CommandContextItem(new AnonymousCommand(() => _store.Remove(query.Id))
             {
                 Name = "削除",
                 Result = CommandResult.KeepOpen(),
-            }),
+            })
+            {
+                RequestedShortcut = KeyChordHelpers.FromModifiers(
+                    ctrl: true, alt: false, shift: false, win: false,
+                    vkey: VirtualKey.Delete, scanCode: 0),
+            },
         ];
 
         return item;
+    }
+
+    // 固定状態を反転して保存する（AddOrUpdate が Changed を発火し、表示側が追従する）。
+    private void TogglePin(SavedQuery query)
+    {
+        query.PinnedToTopLevel = !query.PinnedToTopLevel;
+        _store.AddOrUpdate(query);
     }
 
     // 記録済み件数を項目タイトルへ反映（一覧ページを開いた等で更新された値を追う。API なし）。

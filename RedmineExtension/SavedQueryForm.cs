@@ -76,7 +76,7 @@ internal sealed partial class SavedQueryFormPage : ContentPage
     {
         Title = editing is null ? "保存クエリを作成" : "保存クエリを編集";
         Name = editing is null ? "作成" : "編集";
-        Icon = new IconInfo(""); // glyph:E710
+        Icon = new IconInfo(""); // glyph:E710
         _form = new SavedQueryForm(store, editing);
     }
 

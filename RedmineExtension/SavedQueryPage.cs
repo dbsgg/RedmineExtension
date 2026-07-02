@@ -9,10 +9,14 @@ namespace RedmineExtension;
 
 /// <summary>
 /// 保存クエリの結果一覧ページ。フィルタ結果を並べ、ホスト標準のクエリ絞り込み(ファジー)で検索する。
-/// 開く度に取得し、その total_count を保存クエリの件数として記録する。
+/// PageSize 件ずつ取得し、末尾までスクロールすると次のページを追記する(LoadMore)。
+/// 開く度に先頭ページから取り直し、その total_count を保存クエリの件数として記録する。
 /// </summary>
 internal sealed partial class SavedQueryPage : ListPage
 {
+    // 1 回の取得件数（Redmine API の limit）。末尾スクロールでこの単位で追記する。
+    private const int PageSize = 100;
+
     // 連続呼び出しでの多重取得は防ぎつつ、開く度に最新を反映するための間隔。
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
 
@@ -25,6 +29,7 @@ internal sealed partial class SavedQueryPage : ListPage
     private IListItem[] _items;
     private DateTime _loadedAtUtc = DateTime.MinValue;
     private bool _loading;
+    private int _issueCount; // 読み込み済みのチケット項目数。次ページ取得の offset に使う。
 
     public SavedQueryPage(SavedQuery query, RedmineApi api, TicketHistory history, SettingsManager settings, SavedQueryStore store)
     {
@@ -35,7 +40,7 @@ internal sealed partial class SavedQueryPage : ListPage
         _store = store;
 
         Title = query.Name;
-        Name = "Open";
+        Name = "開く";
         Icon = new IconInfo(""); // glyph:E71C
         PlaceholderText = "クエリでファジー絞り込み";
         ShowDetails = true; // フォーカス時に右ペインの詳細を表示する
@@ -45,55 +50,101 @@ internal sealed partial class SavedQueryPage : ListPage
 
     public override IListItem[] GetItems()
     {
-        // ページを開く度に(古ければ)再取得し、チケットの変更を反映する。
+        // ページを開く度に(古ければ)先頭ページから取り直し、チケットの変更を反映する。
         if (!_loading && DateTime.UtcNow - _loadedAtUtc > RefreshInterval)
         {
             _loading = true;
-            _ = LoadAsync();
+            _ = LoadAsync(append: false);
         }
 
         return _items;
     }
 
-    private async Task LoadAsync()
+    // 末尾までスクロールしたら次のページを追記する（HasMoreItems が true の間ホストが呼ぶ）。
+    public override void LoadMore() => LoadNextPage();
+
+    // 次のページを取得して追記する。残りが無い/取得中なら何もしない。
+    // ホストの自動呼び出し(LoadMore)と明示コマンド(Ctrl+L)の両方から使う。
+    private void LoadNextPage()
+    {
+        if (_loading || !HasMoreItems)
+        {
+            return;
+        }
+
+        _loading = true;
+        IsLoading = true;
+        _ = LoadAsync(append: true);
+    }
+
+    // Ctrl+L=さらに読み込む（末尾までスクロールしなくても次の 100 件を追加取得できる）。
+    private CommandContextItem LoadMoreContext() =>
+        new(new AnonymousCommand(LoadNextPage)
+        {
+            Name = "さらに読み込む",
+            Result = CommandResult.KeepOpen(),
+        })
+        {
+            RequestedShortcut = KeyChordHelpers.FromModifiers(
+                ctrl: true, alt: false, shift: false, win: false,
+                vkey: VirtualKey.L, scanCode: 0),
+        };
+
+    private async Task LoadAsync(bool append)
     {
         try
         {
             if (!_api.IsConfigured)
             {
                 _items = [_settings.SettingsPrompt()];
+                HasMoreItems = false;
                 return;
             }
 
-            var (issues, total) = await _api.SearchIssuesAsync(_query, 100).ConfigureAwait(false);
+            var offset = append ? _issueCount : 0;
+            var (issues, total) = await _api.SearchIssuesAsync(_query, PageSize, offset).ConfigureAwait(false);
 
-            // 一覧を開いたタイミングで件数を記録する（追加取得なし）。
-            _store.UpdateCount(_query.Id, total);
+            if (append)
+            {
+                _items = [.. _items, .. issues.Select(BuildIssueItem)];
+                _issueCount += issues.Count;
+            }
+            else
+            {
+                // 一覧を開いたタイミングで件数を記録する（追加取得なし）。
+                _store.UpdateCount(_query.Id, total);
 
-            _items = issues.Count == 0
-                ? [
-                    new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)))
-                    {
-                        Title = "該当チケットなし",
-                        Subtitle = "Redmine で開く",
-                    },
-                  ]
-                : issues.Select(BuildIssueItem).ToArray();
+                _issueCount = issues.Count;
+                _items = issues.Count == 0
+                    ? [
+                        new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)) { Name = "ブラウザで開く" })
+                        {
+                            Title = "該当チケットなし",
+                            Subtitle = "Enter で Redmine の一覧をブラウザで開く",
+                        },
+                      ]
+                    : issues.Select(BuildIssueItem).ToArray();
+            }
+
+            // 残りがあれば末尾スクロールでさらに取得できる。
+            HasMoreItems = _issueCount < total;
         }
         catch (Exception ex)
         {
             _items = [
-                new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)))
+                new ListItem(new OpenUrlCommand(_api.IssuesWebUrl(_query)) { Name = "ブラウザで開く" })
                 {
                     Title = $"取得に失敗: {ex.Message}",
-                    Subtitle = "Redmine で開く",
+                    Subtitle = "Enter で Redmine の一覧をブラウザで開く",
                 },
             ];
+            HasMoreItems = false;
         }
         finally
         {
             _loadedAtUtc = DateTime.UtcNow;
             _loading = false;
+            IsLoading = false;
             RaiseItemsChanged();
         }
     }
@@ -103,27 +154,64 @@ internal sealed partial class SavedQueryPage : ListPage
         var url = _api.IssueUrl(issue.Id);
         var subject = issue.Subject;
 
-        return new ListItem(new OpenTicketCommand(url, issue.Id, () => subject, _history))
+        // Enter=説明・コメントページへ遷移（ブラウザは Ctrl+Enter）。
+        var item = new ListItem(new CommentsPage(issue.Id, _api, _history, () => subject))
         {
             Title = $"#{issue.Id} {subject}",
             Subtitle = TicketDetails.Subtitle(issue),
             Details = TicketDetails.Build(issue, url),
             Icon = new IconInfo(""), // glyph:E774
-            MoreCommands = [
-                new CommandContextItem(new CopyTicketLinkCommand(_api, issue.Id, _history))
-                {
-                    RequestedShortcut = KeyChordHelpers.FromModifiers(
-                        ctrl: true, alt: false, shift: false, win: false,
-                        vkey: VirtualKey.Enter, scanCode: 0),
-                },
-                new CommandContextItem(new CommentsPage(issue.Id, _api))
-                {
-                    Title = "コメント",
-                    RequestedShortcut = KeyChordHelpers.FromModifiers(
-                        ctrl: true, alt: false, shift: false, win: false,
-                        vkey: VirtualKey.C, scanCode: 0),
-                },
-            ],
         };
+
+        item.MoreCommands = [
+            // Ctrl+Enter=ブラウザで開く。
+            new CommandContextItem(new OpenTicketCommand(url, issue.Id, () => subject, _history))
+            {
+                RequestedShortcut = KeyChordHelpers.FromModifiers(
+                    ctrl: true, alt: false, shift: false, win: false,
+                    vkey: VirtualKey.Enter, scanCode: 0),
+            },
+
+            // Ctrl+C=リンクをコピー（Windows のコピー慣例）。
+            new CommandContextItem(new CopyTicketLinkCommand(_api, issue.Id, _history))
+            {
+                RequestedShortcut = KeyChordHelpers.FromModifiers(
+                    ctrl: true, alt: false, shift: false, win: false,
+                    vkey: VirtualKey.C, scanCode: 0),
+            },
+
+            // Ctrl+R=このチケットだけ最新に更新（その場で表示を差し替え）。
+            new CommandContextItem(new AnonymousCommand(() => _ = RefreshIssueAsync(issue.Id, item))
+            {
+                Name = "最新に更新",
+                Result = CommandResult.KeepOpen(),
+            })
+            {
+                RequestedShortcut = KeyChordHelpers.FromModifiers(
+                    ctrl: true, alt: false, shift: false, win: false,
+                    vkey: VirtualKey.R, scanCode: 0),
+            },
+
+            // Ctrl+L=さらに読み込む（どの項目からでも次ページを取得できる）。
+            LoadMoreContext(),
+        ];
+
+        return item;
+    }
+
+    // チケット単体を再取得し、同一項目の表示をその場で更新する（フォーカス維持のため再生成しない）。
+    private async Task RefreshIssueAsync(int id, ListItem item)
+    {
+        try
+        {
+            var issue = await _api.GetIssueAsync(id).ConfigureAwait(false);
+            item.Title = $"#{issue.Id} {issue.Subject}";
+            item.Subtitle = TicketDetails.Subtitle(issue);
+            item.Details = TicketDetails.Build(issue, _api.IssueUrl(issue.Id));
+        }
+        catch
+        {
+            // 取得失敗は無視（表示は前回のまま）。
+        }
     }
 }
