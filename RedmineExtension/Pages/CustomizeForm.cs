@@ -80,8 +80,13 @@ internal sealed partial class CustomizeForm : FormContent
         var sb = new StringBuilder();
         sb.Append("{\"type\":\"AdaptiveCard\",\"$schema\":\"http://adaptivecards.io/schemas/adaptive-card.json\",\"version\":\"1.5\",\"body\":[");
 
-        // 詳細ペインの既定項目（複数選択）。
-        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Input.ChoiceSet\",\"id\":\"detailFields\",\"label\":{J(Strings.Customize.DetailFieldsLabel)},\"isMultiSelect\":true,\"choices\":[");
+        // --- セクション1: 詳細ペインの既定項目（見出し + 開閉ボタン + 複数選択） ---
+        // カスタマイズ済みなら初期状態で開いておく。畳んだまま保存しても選択は維持される。
+        var fieldsCustomized = _config.DetailFields is not null;
+        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"TextBlock\",\"wrap\":true,\"weight\":\"Bolder\",\"text\":{J(Strings.Customize.DetailFieldsLabel)}}},");
+        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"ActionSet\",\"actions\":[{{\"type\":\"Action.ToggleVisibility\",\"title\":{J(Strings.Customize.ShowDetailFields)},\"targetElements\":[\"detailFieldsBox\"]}}]}},");
+        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Container\",\"id\":\"detailFieldsBox\",\"isVisible\":{(fieldsCustomized ? "true" : "false")},\"items\":[");
+        sb.Append("{\"type\":\"Input.ChoiceSet\",\"id\":\"detailFields\",\"isMultiSelect\":true,\"choices\":[");
         var first = true;
         foreach (var (key, label) in TicketDetails.Fields)
         {
@@ -94,17 +99,32 @@ internal sealed partial class CustomizeForm : FormContent
             sb.Append(CultureInfo.InvariantCulture, $"{{\"title\":{J(label)},\"value\":{J(key)}}}");
         }
 
-        sb.Append(CultureInfo.InvariantCulture, $"],\"value\":{J(string.Join(",", currentFields))}}},");
+        sb.Append(CultureInfo.InvariantCulture, $"],\"value\":{J(string.Join(",", currentFields))}}}]}},");
 
-        // 新規保存クエリの固定既定。
+        // --- セクション2: 保存クエリ（見出し + 固定既定トグル） ---
+        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"TextBlock\",\"wrap\":true,\"weight\":\"Bolder\",\"spacing\":\"Large\",\"separator\":true,\"text\":{J(Strings.Queries.HubTitle)}}},");
         sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Input.Toggle\",\"id\":\"pinNew\",\"title\":{J(Strings.SettingsUi.PinNewLabel)},\"value\":{J(_config.PinNewQueries ? "true" : "false")}}},");
 
-        // キーバインド（区分見出し + 1 アクション 1 行。空欄=既定に戻す）。
-        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"TextBlock\",\"wrap\":true,\"spacing\":\"Large\",\"weight\":\"Bolder\",\"text\":{J(Strings.Customize.KeybindingsHeader)}}},");
+        // --- セクション3: キーバインド（見出し + 開閉ボタン + 1 アクション 1 行。空欄=既定に戻す） ---
+        // 上書きが1つでもあれば初期状態で開いておく。非表示中の入力値も送信されるため、
+        // 畳んだまま保存しても現在の設定は維持される。
+        var anyCustom = Keybindings.Actions.Any(a => Keybindings.BindingText(a.Id) != a.DefaultBinding);
+        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"TextBlock\",\"wrap\":true,\"spacing\":\"Large\",\"separator\":true,\"weight\":\"Bolder\",\"text\":{J(Strings.Customize.KeybindingsHeader)}}},");
+        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"ActionSet\",\"actions\":[{{\"type\":\"Action.ToggleVisibility\",\"title\":{J(Strings.Customize.ShowKeybindings)},\"targetElements\":[\"keybindingsBox\"]}}]}},");
+        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Container\",\"id\":\"keybindingsBox\",\"isVisible\":{(anyCustom ? "true" : "false")},\"items\":[");
+        var firstKey = true;
         foreach (var action in Keybindings.Actions)
         {
-            sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Input.Text\",\"id\":{J("key_" + action.Id)},\"label\":{J(action.Label())},\"placeholder\":{J(action.DefaultBinding)},\"value\":{J(Keybindings.BindingText(action.Id))}}},");
+            if (!firstKey)
+            {
+                sb.Append(',');
+            }
+
+            firstKey = false;
+            sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Input.Text\",\"id\":{J("key_" + action.Id)},\"label\":{J(action.Label())},\"placeholder\":{J(action.DefaultBinding)},\"value\":{J(Keybindings.BindingText(action.Id))}}}");
         }
+
+        sb.Append("]},");
 
         sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"TextBlock\",\"isSubtle\":true,\"wrap\":true,\"text\":{J(Strings.Customize.SaveHint)}}}");
         sb.Append(CultureInfo.InvariantCulture, $"],\"actions\":[{{\"type\":\"Action.Submit\",\"title\":{J(Strings.Customize.Submit)}}}]}}");

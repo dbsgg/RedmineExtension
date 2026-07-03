@@ -76,6 +76,10 @@ internal sealed class SettingsManager
         };
         _settings.Add(_countTtlSetting);
 
+        // コンボの既定値（未保存時に先頭項目へ倒れないよう明示する）。
+        _historyCountSetting.Value = _defaultHistoryCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _countTtlSetting.Value = "30";
+
         _settings.SettingsChanged += OnSettingsChanged;
     }
 

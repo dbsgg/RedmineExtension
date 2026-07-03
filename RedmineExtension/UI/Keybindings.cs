@@ -19,10 +19,10 @@ internal static class Keybindings
     /// <summary>カスタマイズ可能なアクション（id・既定バインド・表示名）。フォームの行にもなる。</summary>
     public sealed record ActionDef(string Id, string DefaultBinding, Func<string> Label);
 
-    /// <summary>区分順（ナビゲーション → チケット操作 → 保存クエリ管理）。</summary>
+    /// <summary>区分順（ナビゲーション → チケット操作 → 保存クエリ管理）。
+    /// Ctrl+Enter（Enter の対: ブラウザで開く）は固定ペアのため再割当対象外。</summary>
     public static readonly ActionDef[] Actions =
     [
-        new("openInBrowser", "Ctrl+Enter", () => Strings.Common.OpenInBrowser),
         new("back", "Alt+Left", () => Strings.Common.Back),
         new("home", "Alt+Home", () => Strings.Common.Home),
         new("copyLink", "Ctrl+C", () => Strings.Common.CopyLink),
@@ -37,7 +37,11 @@ internal static class Keybindings
     ];
 
     // ---- ナビゲーション ----
-    public static KeyChord OpenInBrowser => Resolve("openInBrowser");
+
+    /// <summary>Ctrl+Enter 固定（Enter の対アクション。再割当不可、入れ替え設定のみ）。</summary>
+    public static readonly KeyChord OpenInBrowser =
+        KeyChordHelpers.FromModifiers(ctrl: true, alt: false, shift: false, win: false, vkey: VirtualKey.Enter, scanCode: 0);
+
     public static KeyChord Back => Resolve("back");
     public static KeyChord Home => Resolve("home");
 

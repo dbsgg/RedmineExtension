@@ -39,7 +39,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
 
     private string _search = string.Empty;
 
-    public RedmineExtensionPage(SettingsManager settings, RedmineApi api, TicketHistory history, SavedQueryHubPage hub, CustomizePage customize)
+    public RedmineExtensionPage(SettingsManager settings, RedmineApi api, TicketHistory history, SavedQueryHubPage hub, CustomizePage customize, UiConfigStore uiConfig)
     {
         Icon = new IconInfo("");
         Title = "Redmine";
@@ -52,6 +52,13 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
         _history = history;
         _hub = hub;
         _customize = customize;
+
+        // カスタマイズ保存（Enter 入れ替え等）でチケット項目キャッシュを作り直す。
+        uiConfig.Changed += (_, _) =>
+        {
+            _ticketItems.Clear();
+            RaiseItemsChanged();
+        };
     }
 
     public override void UpdateSearchText(string oldSearch, string newSearch)
@@ -106,7 +113,8 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
     private ListItem CreateTicketItem(int id)
     {
         var url = _api.IssueUrl(id);
-        // Enter=説明・コメントページへ遷移（ブラウザは Ctrl+Enter）。
+        // Enter=説明・コメントページ / Ctrl+Enter=ブラウザ（固定ペア）。
+        var browser = new OpenTicketCommand(url, id, () => TitleFor(id), _history);
         var item = new ListItem(new CommentsPage(id, _api, _history, () => _subjects.GetValueOrDefault(id)))
         {
             Title = ComposeTitle(id),
@@ -121,7 +129,8 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
         }
 
         item.MoreCommands = [
-            OpenContext(id), CopyContext(id), RefreshContext(id, item),
+            new CommandContextItem(browser) { RequestedShortcut = Keybindings.OpenInBrowser },
+            CopyContext(id), RefreshContext(id, item),
             TicketEdit.StatusContext(_api, id), TicketEdit.AddCommentContext(_api, id),
             Navigation.BackContext(),
             Navigation.HomeContext(),
@@ -244,7 +253,8 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
         var title = entry.Title;
         var label = string.IsNullOrWhiteSpace(title) ? $"#{entry.Id}" : $"#{entry.Id} {title}";
 
-        // Enter=説明・コメントページへ遷移（ブラウザは Ctrl+Enter）。
+        // Enter=説明・コメントページ / Ctrl+Enter=ブラウザ（固定ペア）。
+        var browser = new OpenTicketCommand(url, entry.Id, () => TitleFor(entry.Id) ?? title, _history);
         var item = new ListItem(new CommentsPage(entry.Id, _api, _history, () => TitleFor(entry.Id) ?? title))
         {
             Title = label,
@@ -259,7 +269,8 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
         }
 
         item.MoreCommands = [
-            OpenContext(entry.Id), CopyContext(entry.Id), RefreshContext(entry.Id, item),
+            new CommandContextItem(browser) { RequestedShortcut = Keybindings.OpenInBrowser },
+            CopyContext(entry.Id), RefreshContext(entry.Id, item),
             TicketEdit.StatusContext(_api, entry.Id), TicketEdit.AddCommentContext(_api, entry.Id),
             Navigation.BackContext(),
             Navigation.HomeContext(),
@@ -271,13 +282,6 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
     // 履歴・検索で共有する現時点の最良タイトル（取得済み概要 → subject キャッシュの順）。
     private string? TitleFor(int id) =>
         _summaries.TryGetValue(id, out var summary) ? summary.Subject : _subjects.GetValueOrDefault(id);
-
-    // Ctrl+Enter でチケットをブラウザで開く（履歴にも記録）。
-    private CommandContextItem OpenContext(int id) =>
-        new(new OpenTicketCommand(_api.IssueUrl(id), id, () => TitleFor(id), _history))
-        {
-            RequestedShortcut = Keybindings.OpenInBrowser,
-        };
 
     private CommandContextItem CopyContext(int id) =>
         new(new CopyTicketLinkCommand(_api, id, _history))

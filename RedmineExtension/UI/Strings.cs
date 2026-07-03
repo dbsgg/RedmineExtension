@@ -86,7 +86,7 @@ internal static class Strings
         public static readonly string FilterPlaceholder = T("説明・コメントを絞り込み", "Filter description & comments");
         public static readonly string DescriptionLabel = T("説明", "Description");
         public static readonly string UnknownAuthor = T("（不明）", "(unknown)");
-        public static readonly string NoEntries = T("説明・コメントなし", "No description or comments");
+        public static readonly string NoDescription = T("（説明なし）", "(no description)");
         public static readonly string AddCommentItem = T("コメントを追加", "Add a comment");
 
         public static readonly string ShowOldestFirst =
@@ -152,10 +152,6 @@ internal static class Strings
             "Use query-specific detail pane fields");
 
         public static readonly string FormDetailsLabel = T("詳細ペインに表示する項目", "Detail pane fields");
-
-        public static readonly string FormDetailsShow = T(
-            "表示項目の選択を開く / 閉じる",
-            "Show / hide field selection");
 
         public static readonly string FormHint = T(
             "Redmine でフィルタを保存し、URL の query_id を貼るのが簡単です。空欄なら未完了チケットを表示します。API キーは資格情報マネージャから付与されるため、クエリに key= は不要です。",
@@ -225,6 +221,14 @@ internal static class Strings
             "キーバインド（Ctrl / Alt / Win のいずれかが必須。C+ / A+ / S+ / W+ の短縮形も可。例: Ctrl+Shift+K = C+S+K, Alt+Left, Ctrl+Delete）",
             "Shortcuts (Ctrl / Alt / Win required; C+ / A+ / S+ / W+ abbreviations allowed, e.g. Ctrl+Shift+K = C+S+K, Alt+Left, Ctrl+Delete)");
 
+        public static readonly string ShowKeybindings = T(
+            "キーバインド一覧を開く / 閉じる",
+            "Show / hide the shortcut list");
+
+        public static readonly string ShowDetailFields = T(
+            "表示項目の選択を開く / 閉じる",
+            "Show / hide field selection");
+
         public static readonly string SaveHint = T(
             "保存後、開いているページには再表示時に反映されます。",
             "Changes apply when pages are reopened.");
@@ -247,6 +251,11 @@ internal static class Strings
     /// <summary>詳細ペイン（右ペイン）の項目名。TicketDetails.Fields のキーと対で使う。</summary>
     internal static class Fields
     {
+        public static readonly string Project = T("プロジェクト", "Project");
+        public static readonly string Category = T("カテゴリ", "Category");
+        public static readonly string TargetVersion = T("対象バージョン", "Target version");
+        public static readonly string Created = T("作成日", "Created");
+        public static readonly string EstimatedHours = T("予定工数", "Estimated hours");
         public static readonly string Tracker = T("トラッカー", "Tracker");
         public static readonly string Status = T("ステータス", "Status");
         public static readonly string Priority = T("優先度", "Priority");

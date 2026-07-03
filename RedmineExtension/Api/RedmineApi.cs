@@ -22,7 +22,12 @@ internal sealed record IssueSummary(
     string? Author = null,
     string? StartDate = null,
     string? DueDate = null,
-    string? Description = null);
+    string? Description = null,
+    string? Project = null,
+    string? Category = null,
+    string? TargetVersion = null,
+    string? CreatedOn = null,
+    string? EstimatedHours = null);
 
 /// <summary>チケットのコメント（journal の notes）または説明。</summary>
 internal sealed record IssueComment(string Author, string Notes, string CreatedOn);
@@ -30,8 +35,8 @@ internal sealed record IssueComment(string Author, string Notes, string CreatedO
 /// <summary>チケットのステータス（/issue_statuses.json の1件）。</summary>
 internal sealed record IssueStatus(int Id, string Name);
 
-/// <summary>チケットの説明＋コメント一式。</summary>
-internal sealed record IssueThread(IssueComment? Description, IReadOnlyList<IssueComment> Comments);
+/// <summary>チケットの説明＋コメント一式（同じレスポンスから取れる基本情報も同梱）。</summary>
+internal sealed record IssueThread(IssueSummary Issue, IssueComment? Description, IReadOnlyList<IssueComment> Comments);
 
 /// <summary>
 /// Redmine REST API への最小限のアクセス。タイトル取得・検索に使う。
@@ -99,7 +104,7 @@ internal sealed class RedmineApi
             }
         }
 
-        return new IssueThread(description, comments);
+        return new IssueThread(ParseIssue(issue), description, comments);
     }
 
     // issues.json / issues/{id}.json のチケット要素から基本情報を取り出す。
@@ -113,6 +118,13 @@ internal sealed class RedmineApi
 
         var done = e.TryGetProperty("done_ratio", out var d) && d.TryGetInt32(out var dr) ? dr : 0;
 
+        // 予定工数は数値で返る（小数あり）。表示用に文字列へ整形しておく。
+        string? estimated = null;
+        if (e.TryGetProperty("estimated_hours", out var eh) && eh.ValueKind == JsonValueKind.Number)
+        {
+            estimated = eh.GetDouble().ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         return new IssueSummary(
             e.GetProperty("id").GetInt32(),
             e.TryGetProperty("subject", out var s) ? s.GetString() ?? string.Empty : string.Empty,
@@ -125,7 +137,12 @@ internal sealed class RedmineApi
             Author: Name("author"),
             StartDate: Str("start_date"),
             DueDate: Str("due_date"),
-            Description: Str("description"));
+            Description: Str("description"),
+            Project: Name("project"),
+            Category: Name("category"),
+            TargetVersion: Name("fixed_version"),
+            CreatedOn: Str("created_on"),
+            EstimatedHours: estimated);
     }
 
     /// <summary>クエリに合致するチケットを取得する。offset でページ取得できる。total_count も返す。</summary>

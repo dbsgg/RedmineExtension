@@ -38,8 +38,15 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
         _store = new SavedQueryStore();
 
         // ページはセッションで共有する（キャッシュ・状態を保つ）。ハブは番号検索ページからも遷移できる。
-        _hub = new SavedQueryHubPage(_store, _api, _history, _settings);
-        _mainPage = new RedmineExtensionPage(_settings, _api, _history, _hub, new CustomizePage(uiConfig, _settings));
+        _hub = new SavedQueryHubPage(_store, _api, _history, _settings, uiConfig);
+        _mainPage = new RedmineExtensionPage(_settings, _api, _history, _hub, new CustomizePage(uiConfig, _settings), uiConfig);
+
+        // カスタマイズ保存（Enter 入れ替え等）で固定項目を作り直す。
+        uiConfig.Changed += (_, _) =>
+        {
+            _pinnedItems.Clear();
+            RaiseItemsChanged();
+        };
 
         // 保存クエリの追加/削除/固定変更で top-level を更新する（名前等も変わるため作り直す）。
         _store.Changed += (_, _) =>
@@ -89,6 +96,8 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
     // 固定クエリの top-level コマンド（Enter=一覧 / Ctrl+Enter=ブラウザ / 編集・固定解除・削除）。
     private CommandItem BuildQueryTopLevel(SavedQuery query)
     {
+        var web = new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = Strings.Common.OpenInBrowser };
+
         return new CommandItem(new SavedQueryPage(query, _api, _history, _settings, _store))
         {
             Title = SavedQueryText.Title(query),
@@ -96,7 +105,7 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
             Icon = new IconInfo(""), // glyph:E71C
             MoreCommands = [
                 // Ctrl+Enter=ブラウザで開く（Redmine のフィルタ結果）
-                new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = Strings.Common.OpenInBrowser })
+                new CommandContextItem(web)
                 {
                     RequestedShortcut = Keybindings.OpenInBrowser,
                 },

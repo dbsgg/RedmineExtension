@@ -36,7 +36,7 @@ internal sealed partial class SavedQueryHubPage : ListPage
     private bool _refreshing;
     private DateTime _lastRefreshUtc = DateTime.MinValue;
 
-    public SavedQueryHubPage(SavedQueryStore store, RedmineApi api, TicketHistory history, SettingsManager settings)
+    public SavedQueryHubPage(SavedQueryStore store, RedmineApi api, TicketHistory history, SettingsManager settings, UiConfigStore uiConfig)
     {
         _store = store;
         _api = api;
@@ -52,6 +52,13 @@ internal sealed partial class SavedQueryHubPage : ListPage
 
         // 追加/編集/削除で作り直す。
         _store.Changed += (_, _) =>
+        {
+            _built = false;
+            RaiseItemsChanged();
+        };
+
+        // カスタマイズ保存（Enter 入れ替え等）でも作り直す。
+        uiConfig.Changed += (_, _) =>
         {
             _built = false;
             RaiseItemsChanged();
@@ -117,7 +124,8 @@ internal sealed partial class SavedQueryHubPage : ListPage
 
     private ListItem BuildQueryItem(SavedQuery query)
     {
-        // Enter=一覧ページへ遷移
+        // Enter=結果一覧ページ / Ctrl+Enter=ブラウザ（固定ペア）。
+        var web = new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = Strings.Common.OpenInBrowser };
         var item = new ListItem(new SavedQueryPage(query, _api, _history, _settings, _store))
         {
             Title = SavedQueryText.Title(query),
@@ -127,7 +135,7 @@ internal sealed partial class SavedQueryHubPage : ListPage
 
         item.MoreCommands = [
             // Ctrl+Enter=ブラウザで開く（Redmine のフィルタ結果）
-            new CommandContextItem(new OpenUrlCommand(_api.IssuesWebUrl(query)) { Name = Strings.Common.OpenInBrowser })
+            new CommandContextItem(web)
             {
                 RequestedShortcut = Keybindings.OpenInBrowser,
             },

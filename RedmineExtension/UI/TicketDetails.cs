@@ -10,17 +10,23 @@ namespace RedmineExtension;
 /// <summary>フォーカス時に右ペインへ出すチケットの基本情報（Details）を組み立てる。</summary>
 internal static class TicketDetails
 {
-    /// <summary>選択可能な表示項目（キーと表示名）。設定・保存クエリのローカル設定で共有する。</summary>
+    /// <summary>選択可能な表示項目（キーと表示名）。設定・保存クエリのローカル設定で共有する。
+    /// いずれも issues.json のレスポンスに含まれる情報で、追加のリクエストは発生しない。</summary>
     public static readonly (string Key, string Label)[] Fields =
     [
+        ("project", Strings.Fields.Project),
         ("tracker", Strings.Fields.Tracker),
         ("status", Strings.Fields.Status),
         ("priority", Strings.Fields.Priority),
         ("assignee", Strings.Fields.Assignee),
         ("author", Strings.Fields.Author),
+        ("category", Strings.Fields.Category),
+        ("version", Strings.Fields.TargetVersion),
         ("progress", Strings.Fields.Progress),
+        ("estimated", Strings.Fields.EstimatedHours),
         ("start", Strings.Fields.StartDate),
         ("due", Strings.Fields.DueDate),
+        ("created", Strings.Fields.Created),
         ("updated", Strings.Fields.Updated),
         ("description", Strings.Fields.Description),
     ];
@@ -30,31 +36,18 @@ internal static class TicketDetails
     {
         var body = new StringBuilder();
 
-        void Line(string key, string label, string value)
+        foreach (var (key, label, value) in Rows(issue))
         {
             if (fields.Contains(key))
             {
-                body.Append(CultureInfo.InvariantCulture, $"**{label}**: {value}\n\n");
+                body.Append(CultureInfo.InvariantCulture, $"**{label}**: {Or(value)}\n\n");
             }
         }
 
-        Line("tracker", Strings.Fields.Tracker, Or(issue.Tracker));
-        Line("status", Strings.Fields.Status, Or(issue.Status));
-        Line("priority", Strings.Fields.Priority, Or(issue.Priority));
-        Line("assignee", Strings.Fields.Assignee, Or(issue.Assignee));
-        Line("author", Strings.Fields.Author, Or(issue.Author));
-        Line("progress", Strings.Fields.Progress, issue.DoneRatio.ToString(CultureInfo.InvariantCulture) + "%");
-        Line("start", Strings.Fields.StartDate, Date(issue.StartDate));
-        Line("due", Strings.Fields.DueDate, Date(issue.DueDate));
-        Line("updated", Strings.Fields.Updated, Date(issue.UpdatedOn));
-
-        if (fields.Contains("description"))
+        // 説明は全文を表示する（要約は一覧の副題側の役割）。
+        if (fields.Contains("description") && !string.IsNullOrWhiteSpace(issue.Description))
         {
-            var description = Snippet(issue.Description);
-            if (description.Length > 0)
-            {
-                body.Append(CultureInfo.InvariantCulture, $"**{Strings.Fields.Description}**:\n\n{description}\n\n");
-            }
+            body.Append(CultureInfo.InvariantCulture, $"**{Strings.Fields.Description}**:\n\n{issue.Description}\n\n");
         }
 
         return new Details
@@ -64,23 +57,49 @@ internal static class TicketDetails
         };
     }
 
-    /// <summary>一覧の副題向けの短い要約（ステータス · トラッカー · 担当者）。空項目は省く。</summary>
+    /// <summary>全項目（説明を除く）を「**ラベル**: 値」で1行ずつ並べる。空値は「—」。
+    /// コメントページの説明項目など、表示項目のカスタマイズ設定に依らない全量表示用。</summary>
+    public static string FieldLines(IssueSummary issue)
+    {
+        var body = new StringBuilder();
+        foreach (var (_, label, value) in Rows(issue))
+        {
+            body.Append(CultureInfo.InvariantCulture, $"**{label}**: {Or(value)}\n\n");
+        }
+
+        return body.ToString();
+    }
+
+    // 説明以外の全項目（キー・ラベル・表示値）。Build / FieldLines で共有する。
+    private static IEnumerable<(string Key, string Label, string? Value)> Rows(IssueSummary issue)
+    {
+        yield return ("project", Strings.Fields.Project, issue.Project);
+        yield return ("tracker", Strings.Fields.Tracker, issue.Tracker);
+        yield return ("status", Strings.Fields.Status, issue.Status);
+        yield return ("priority", Strings.Fields.Priority, issue.Priority);
+        yield return ("assignee", Strings.Fields.Assignee, issue.Assignee);
+        yield return ("author", Strings.Fields.Author, issue.Author);
+        yield return ("category", Strings.Fields.Category, issue.Category);
+        yield return ("version", Strings.Fields.TargetVersion, issue.TargetVersion);
+        yield return ("progress", Strings.Fields.Progress, issue.DoneRatio.ToString(CultureInfo.InvariantCulture) + "%");
+        yield return ("estimated", Strings.Fields.EstimatedHours, issue.EstimatedHours);
+        yield return ("start", Strings.Fields.StartDate, DateOrNull(issue.StartDate));
+        yield return ("due", Strings.Fields.DueDate, DateOrNull(issue.DueDate));
+        yield return ("created", Strings.Fields.Created, DateOrNull(issue.CreatedOn));
+        yield return ("updated", Strings.Fields.Updated, DateOrNull(issue.UpdatedOn));
+    }
+
+    /// <summary>一覧の副題向けの短い要約（ステータス · トラッカー · 担当者 · 作成者）。空項目は省く。
+    /// ホストのファジー絞り込みは副題も対象のため、検索キーにもなる。</summary>
     public static string Subtitle(IssueSummary issue)
     {
-        var parts = new System.Collections.Generic.List<string>();
-        if (!string.IsNullOrEmpty(issue.Status))
+        var parts = new List<string>();
+        foreach (var value in new[] { issue.Status, issue.Tracker, issue.Assignee, issue.Author })
         {
-            parts.Add(issue.Status);
-        }
-
-        if (!string.IsNullOrEmpty(issue.Tracker))
-        {
-            parts.Add(issue.Tracker);
-        }
-
-        if (!string.IsNullOrEmpty(issue.Assignee))
-        {
-            parts.Add(issue.Assignee);
+            if (!string.IsNullOrEmpty(value))
+            {
+                parts.Add(value);
+            }
         }
 
         return string.Join(" · ", parts);
@@ -88,19 +107,7 @@ internal static class TicketDetails
 
     private static string Or(string? value) => string.IsNullOrEmpty(value) ? "—" : value;
 
-    // ISO 日時/日付。日付部分（先頭10文字）だけ表示する。
-    private static string Date(string? value) =>
-        string.IsNullOrEmpty(value) ? "—" : (value.Length >= 10 ? value[..10] : value);
-
-    // 説明/コメントの冒頭。改行を詰めて最大 100 文字に切り詰める。
-    private static string Snippet(string? text, int max = 100)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return string.Empty;
-        }
-
-        var collapsed = string.Join(' ', text.Split((char[]?)null, System.StringSplitOptions.RemoveEmptyEntries));
-        return collapsed.Length > max ? collapsed[..max] + "…" : collapsed;
-    }
+    // ISO 日時/日付。日付部分（先頭10文字）だけ表示する。空は null のまま返す。
+    private static string? DateOrNull(string? value) =>
+        string.IsNullOrEmpty(value) ? null : (value.Length >= 10 ? value[..10] : value);
 }

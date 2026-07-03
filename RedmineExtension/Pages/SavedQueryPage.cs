@@ -181,7 +181,8 @@ internal sealed partial class SavedQueryPage : ListPage
         var url = _api.IssueUrl(issue.Id);
         var subject = issue.Subject;
 
-        // Enter=説明・コメントページへ遷移（ブラウザは Ctrl+Enter）。
+        // Enter=説明・コメントページ / Ctrl+Enter=ブラウザ（固定ペア）。
+        var browser = new OpenTicketCommand(url, issue.Id, () => subject, _history);
         var item = new ListItem(new CommentsPage(issue.Id, _api, _history, () => subject))
         {
             Title = $"#{issue.Id} {subject}",
@@ -192,7 +193,7 @@ internal sealed partial class SavedQueryPage : ListPage
 
         item.MoreCommands = [
             // Ctrl+Enter=ブラウザで開く。
-            new CommandContextItem(new OpenTicketCommand(url, issue.Id, () => subject, _history))
+            new CommandContextItem(browser)
             {
                 RequestedShortcut = Keybindings.OpenInBrowser,
             },

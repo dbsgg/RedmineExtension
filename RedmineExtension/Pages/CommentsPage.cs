@@ -144,28 +144,23 @@ internal sealed partial class CommentsPage : ListPage
         }
 
         var items = new List<IListItem>();
-        var description = thread.Description is null ? null : BuildDescriptionItem(thread.Description);
+
+        // 説明項目は本文が空でも常に置く（Details にチケットの基本情報を全量表示するため）。
+        var descEntry = thread.Description
+            ?? new IssueComment(thread.Issue.Author ?? string.Empty, string.Empty, thread.Issue.CreatedOn ?? string.Empty);
+        var description = BuildDescriptionItem(descEntry, thread.Issue);
 
         // 古い順のときは説明（最古）が先頭、新しい順のときは末尾に来る。
-        if (description is not null && !_newestFirst)
+        if (!_newestFirst)
         {
             items.Add(description);
         }
 
         items.AddRange(comments);
 
-        if (description is not null && _newestFirst)
+        if (_newestFirst)
         {
             items.Add(description);
-        }
-
-        if (items.Count == 0)
-        {
-            items.Add(new ListItem(new OpenUrlCommand(_api.IssueUrl(_id)) { Name = Strings.Common.OpenInBrowser })
-            {
-                Title = Strings.Comments.NoEntries,
-                Subtitle = Strings.Tickets.OpenTicketHint,
-            });
         }
 
         // 末尾に簡易操作と戻る導線（Esc が「閉じる」設定でも戻れるように）。
@@ -176,29 +171,61 @@ internal sealed partial class CommentsPage : ListPage
     }
 
     // コメント項目。タイトルに通番「n/総数」を入れて位置が一目でわかるようにする。
-    private ListItem BuildCommentItem(IssueComment entry, int number, int total) =>
-        BuildEntryItem(entry, Strings.Comments.CommentLabel(number, total), CommentIcon);
+    private ListItem BuildCommentItem(IssueComment entry, int number, int total)
+    {
+        var label = Strings.Comments.CommentLabel(number, total);
+        var detailByline = Append(
+            string.IsNullOrEmpty(entry.Author) ? Strings.Comments.UnknownAuthor : entry.Author,
+            FormatDate(entry.CreatedOn, withTime: true));
+
+        return BuildEntryItem(
+            entry,
+            label,
+            CommentIcon,
+            detailsTitle: Strings.Comments.DetailTitle(_id, label),
+            detailsBody: $"{entry.Notes}\n\n— {detailByline}");
+    }
 
     // 説明（チケット本文）の項目。コメントとはアイコンを変えて区別する。
-    private ListItem BuildDescriptionItem(IssueComment entry) =>
-        BuildEntryItem(entry, Strings.Comments.DescriptionLabel, DescriptionIcon);
+    // Details のタイトルは「#番号 チケットタイトル」（項目名で説明だと分かるため）。
+    // 本文の下に区切りを入れ、同じレスポンスで取得済みの基本情報を全項目1行ずつ並べる。
+    private ListItem BuildDescriptionItem(IssueComment entry, IssueSummary issue)
+    {
+        if (string.IsNullOrWhiteSpace(entry.Notes))
+        {
+            entry = entry with { Notes = Strings.Comments.NoDescription };
+        }
 
-    private ListItem BuildEntryItem(IssueComment entry, string label, IconInfo icon)
+        return BuildEntryItem(
+            entry,
+            Strings.Comments.DescriptionLabel,
+            DescriptionIcon,
+            detailsTitle: $"#{_id} {issue.Subject}".TrimEnd(),
+            detailsBody: $"{entry.Notes}\n\n---\n\n{TicketDetails.FieldLines(issue)}");
+    }
+
+    private ListItem BuildEntryItem(IssueComment entry, string label, IconInfo icon, string detailsTitle, string detailsBody)
     {
         var author = string.IsNullOrEmpty(entry.Author) ? Strings.Comments.UnknownAuthor : entry.Author;
         var titleByline = Append(author, FormatDate(entry.CreatedOn, withTime: false));
-        var detailByline = Append(author, FormatDate(entry.CreatedOn, withTime: true));
 
-        return new ListItem(new OpenUrlCommand(_api.IssueUrl(_id)) { Name = Strings.Common.OpenInBrowser })
+        // Enter は割り当てない（遷移先が無いため）。ブラウザは Ctrl+Enter で統一。
+        return new ListItem(new NoOpCommand())
         {
             Title = $"{label} · {titleByline}",
             Subtitle = Snippet(entry.Notes),
             Details = new Details
             {
-                Title = Strings.Comments.DetailTitle(_id, label),
-                Body = $"{entry.Notes}\n\n— {detailByline}",
+                Title = detailsTitle,
+                Body = detailsBody,
             },
             MoreCommands = [
+                // Ctrl+Enter=ブラウザで開く（他ページのチケット項目とキーを統一）。
+                new CommandContextItem(new OpenUrlCommand(_api.IssueUrl(_id)) { Name = Strings.Common.OpenInBrowser })
+                {
+                    RequestedShortcut = Keybindings.OpenInBrowser,
+                },
+
                 // Ctrl+C=リンクをコピー（チケットのリッチリンク）。
                 new CommandContextItem(new CopyTicketLinkCommand(_api, _id, _history))
                 {
