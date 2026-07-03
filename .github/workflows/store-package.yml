@@ -6,7 +6,7 @@ name: Store package
 #   Settings → Secrets and variables → Actions → Variables:
 #     STORE_IDENTITY_NAME          例: 12345Publisher.RedmineForCommandPalette
 #     STORE_PUBLISHER              例: CN=ABCD1234-....
-#     STORE_PUBLISHER_DISPLAY_NAME 例: d-bise（アカウントの「発行者の表示名」と完全一致が必須）
+#     STORE_PUBLISHER_DISPLAY_NAME Partner Center の「発行者の表示名」と完全一致が必須
 # 変数が未設定ならマニフェスト既定のまま（テスト用パッケージ）でビルドする。
 
 on:
