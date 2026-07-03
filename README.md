@@ -1,5 +1,7 @@
 # Redmine for Command Palette
 
+*Read this in [日本語](README.ja.md).*
+
 An unofficial [PowerToys Command Palette](https://learn.microsoft.com/windows/powertoys/command-palette/overview)
 extension for working with [Redmine](https://www.redmine.org/) without leaving the palette.
 
@@ -15,12 +17,12 @@ extension for working with [Redmine](https://www.redmine.org/) without leaving t
 - **Quick edits** — change an issue's status (Ctrl+S) or add a comment (Ctrl+M) without leaving the palette. Anything more detailed is one Ctrl+Enter away in the browser.
 - **Explicit back navigation** — Alt+← (or the trailing "← back" item) goes back one page, even when Esc is configured to close the palette.
 
-### Keyboard scheme (consistent across pages; all remappable)
+### Keyboard scheme (consistent across pages; every key except the Enter/Ctrl+Enter pair is remappable)
 
 | Key (default) | Action |
 |-----|--------|
 | Enter | Navigate: ticket → description & comments page, saved query → result list |
-| Ctrl+Enter | Open in browser (ticket page / Redmine filter results) |
+| Ctrl+Enter | Open in browser (fixed pair with Enter; not remappable) |
 | Ctrl+C | Copy a rich `#<id> <title>` hyperlink (clickable in Teams/Outlook/Word; plain text elsewhere) |
 | Ctrl+R | Refresh (re-fetch the ticket / update the query count) |
 | Ctrl+L | Load the next page of query results |
@@ -30,9 +32,6 @@ extension for working with [Redmine](https://www.redmine.org/) without leaving t
 | Ctrl+N / Ctrl+E / Ctrl+Delete | Add / edit / delete a saved query |
 | Alt+← | Go back one page |
 | Alt+Home | Jump all the way back to the palette home |
-| Ctrl+N | Add a saved query |
-| Ctrl+E | Edit the saved query |
-| Ctrl+Delete | Delete the saved query |
 
 ## Configuration
 
@@ -51,7 +50,7 @@ beyond the connection basics:
 - **Detail pane fields (default)** — multi-select of tracker / status / priority / assignee /
   author / progress / dates / description. Each saved query can override this in its edit form.
 - **Pin new saved queries** — default for the "pin to top level" toggle.
-- **Keyboard shortcuts** — every command can be remapped with `Ctrl+Shift+K`-style text.
+- **Keyboard shortcuts** — the shortcut list is collapsed behind a show/hide button; every command except the fixed Enter/Ctrl+Enter pair can be remapped with `Ctrl+Shift+K`-style text.
   `C+` / `A+` / `S+` / `W+` abbreviations are accepted (`C+S+K` = Ctrl+Shift+K; the last token
   is always the key, so `Ctrl+S` still means the S key). Ctrl / Alt / Win is required; leave a
   field empty to restore the default. Invalid or duplicate bindings are rejected on save.

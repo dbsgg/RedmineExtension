@@ -37,3 +37,7 @@ secrets.json
 
 # Release installers (build-exe.ps1)
 Installer/
+
+# MSIX build output (build-msix.ps1)
+MsixPackages/
+RedmineExtension/AppPackages/

@@ -101,8 +101,11 @@ These are non-negotiable; violating them breaks the build gate or the security m
   `KeyChordHelpers.FromModifiers(ctrl, alt, shift, win, VirtualKey, scanCode)` (**6 args**).
 - **Unified keybinding scheme** (defined in `Keybindings.Actions`; every action is
   user-remappable from the customize form, stored in `ui-config.json`): **Enter** = navigate to
-  a page (ticket → comments page, query → result list; leaf items such as comment rows may open
-  the browser instead). Defaults: **Ctrl+Enter** = open in browser, **Ctrl+C** = copy rich link,
+  a page (ticket → comments page, query → result list; informational leaf rows such as comments
+  bind nothing to Enter — browser access is Ctrl+Enter everywhere).
+  **Ctrl+Enter is a fixed, non-remappable pair with Enter** (item caches
+  are rebuilt on customize saves via `UiConfigStore.Changed`).
+  Defaults: **Ctrl+Enter** = open in browser, **Ctrl+C** = copy rich link,
   **Ctrl+R** = refresh (ticket / query count), **Ctrl+L** = load the next result page,
   **Ctrl+N** = add saved query, **Ctrl+E** = edit, **Ctrl+Delete** = delete,
   **Ctrl+O** = toggle comment order, **Ctrl+S** = change ticket status, **Ctrl+M** = add a
@@ -181,6 +184,13 @@ state degrades to in-memory only.
   comes from the official extension template but **does not match the product — do not trust
   it for distribution decisions**. Public distribution therefore requires a signed MSIX
   (Microsoft Store, or winget-pkgs with `InstallerType: msix`); see `RELEASING.md`.
+- **Store packaging: `build-msix.ps1`** builds x64+ARM64 MSIX and bundles them into an
+  unsigned `.msixbundle` (Partner Center signs). It temporarily rewrites the manifest
+  Identity/Version during the build and restores it in a `finally` (never commit that change);
+  reserved Store identity is injected via `-IdentityName`/`-Publisher` params, not baked into
+  the repo. Single-project MSIX takes its version from `Package.appxmanifest` `<Identity>`,
+  **not** `AppxPackageVersion`. Trimming defaults on (smaller); `-NoTrim` is the escape hatch
+  for SDK installs where ILLink's task host fails (e.g. scoop). See `RELEASING.md` path A.
 - The EXE pipeline (`build-exe.ps1` + `setup.iss` + release.yml) still builds and installs
   correctly but the result is invisible to CmdPal; it is kept only as a record / for a
   possible future host change. `-p:WindowsPackageType=None` flips the csproj to a

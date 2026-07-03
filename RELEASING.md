@@ -36,6 +36,7 @@
 | `.gitignore`（`Installer/`・`publish/` を除外） | ✅ |
 | unpackaged 発行の設定切替（csproj の `WindowsPackageType==None` 条件で pubxml 無効化＋フレームワーク依存・トリミング/単一ファイル/R2R 無効） | ✅ |
 | ローカルでのインストーラー生成（x64/arm64、winget 版 Inno Setup 自動検出） | ✅ `Installer\RedmineExtension_0.0.1_{x64,arm64}.exe` 生成確認済み |
+| **Store 用 MSIX バンドル生成（x64/ARM64 → .msixbundle、makeappx 自動検出、版数整合、マニフェスト自動復元）** | ✅ `build-msix.ps1` で `MsixPackages\*.msixbundle` 生成確認済み |
 | 秘密情報（API キー等）がリポジトリに無いこと | ✅ 資格情報マネージャのみ |
 
 ## 検証済み・結論が出た項目（追記）
@@ -61,6 +62,66 @@ winget install Microsoft.WingetCreate
 #      Secret   WINGET_PAT      … public_repo スコープの PAT（winget-pkgs へ PR するため）
 #      Variable WINGET_ENABLED  … "true"（release.yml の winget-update ジョブ有効化。初回提出後に設定）
 ```
+
+---
+
+# 経路 A: Microsoft Store 公開（推奨・メイン手順）
+
+## A-1. Partner Center の準備（ユーザー作業。ここは自動化不可）
+
+1. [Partner Center](https://partner.microsoft.com/dashboard/home) で開発者登録（個人 $19 買い切り）。
+2. **アプリとゲーム → 新しい製品 → MSIX または PWA アプリ** でアプリ名を予約
+   （例: `Redmine for Command Palette`）。
+3. **製品管理 → 製品 ID** を開き、次の 3 値を控える:
+   - **Package/Identity/Name**（例: `12345Publisher.RedmineForCommandPalette`）
+   - **Package/Identity/Publisher**（例: `CN=ABCD1234-...`）
+   - **Package/Properties/PublisherDisplayName**
+
+> これらの予約値はリポジトリに焼き込まない。`build-msix.ps1` の引数で注入する（下記）。
+
+## A-2. Store アートワーク（未対応・要作業）
+
+現状 `RedmineExtension/Assets/` はテンプレートの仮ロゴ。Store 掲載には以下が必要:
+
+- [ ] 正式なアプリロゴ（44x44 / 150x150 / 310x150 / StoreLogo など。1 枚の高解像度から生成可）
+- [ ] Store 掲載用スクリーンショット（1 枚以上。パレットで動作中の画面）
+- [ ] プライバシーポリシー URL（本拡張は Redmine へ HTTPS 通信・API キーを扱うため必須）
+
+## A-3. MSIX バンドルを生成
+
+```powershell
+# 予約済み Identity を注入して Store 用バンドルを作る（署名なし。Store 側で署名される）
+.\build-msix.ps1 -Version X.Y.Z -IdentityName <予約Name> -Publisher "<予約Publisher>"
+# → MsixPackages\RedmineExtension_X.Y.Z.0_Bundle.msixbundle
+```
+
+- スクリプトはビルド中だけ `Package.appxmanifest` の Identity/Version を書き換え、**終了時に必ず復元**する。
+- `makeappx.exe` は PATH / Windows Kits から自動検出。
+- **トリミングについて**: 既定はトリミング有効（小さいパッケージ）。ただし scoop 版 .NET SDK など
+  ILLink のタスクホスト生成に失敗する環境では `-NoTrim` を付ける（パッケージは大きくなる）。
+  **最終的な Store 提出物はトリミング有効（CI もしくは公式 SDK 環境）で作ることを推奨**。
+
+## A-4. Partner Center へ提出
+
+1. アプリ → **新しい申請を開始**。
+2. **パッケージ** に `.msixbundle` をアップロード。
+3. **ストアの掲載情報 → 説明** に Command Palette 連携である旨を明記
+   （例: 「Windows コマンドパレットから Redmine のチケット操作を行う拡張機能。PowerToys の
+   コマンドパレット有効化が必要です。」）。
+4. **認定通知メモ** にテスト手順（PowerToys 前提・コマンド例）を記載。
+5. 価格・提供範囲を設定して **認定に提出**（通常 1〜3 営業日）。
+
+> Store 掲載だけでは CmdPal のブラウズ検索に出ない。ユーザーは Store 直リンク、または
+> `ms-windows-store://assoc/?Tags=AppExtension-com.microsoft.commandpalette` から見つける。
+> ブラウズにも載せたい場合は経路 B（winget）を併用する。
+
+## A-5. 更新
+
+版数を上げて A-3〜A-4 を繰り返す。Store がインストール済みユーザーへ自動更新する。
+
+---
+
+# 経路 B/C: winget / EXE（補助・記録）
 
 ## 1. バージョンを上げる
 
