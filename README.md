@@ -49,6 +49,7 @@ beyond the connection basics:
 
 - **Detail pane fields (default)** — multi-select of tracker / status / priority / assignee /
   author / progress / dates / description. Each saved query can override this in its edit form.
+- **Default comment order** — newest-first (default) or oldest-first when a comments page first opens (Ctrl+O still toggles per session).
 - **Pin new saved queries** — default for the "pin to top level" toggle.
 - **Keyboard shortcuts** — the shortcut list is collapsed behind a show/hide button; every command except the fixed Enter/Ctrl+Enter pair can be remapped with `Ctrl+Shift+K`-style text.
   `C+` / `A+` / `S+` / `W+` abbreviations are accepted (`C+S+K` = Ctrl+Shift+K; the last token

@@ -67,7 +67,7 @@ internal sealed partial class CustomizeForm : FormContent
             .ToList();
         var detailFields = selected.Count == TicketDetails.Fields.Length ? null : selected;
 
-        _config.Save(detailFields, Get("pinNew") == "true", bindings);
+        _config.Save(detailFields, Get("pinNew") == "true", Get("commentsOldest") == "true", bindings);
 
         BackgroundJob.Notify(Strings.Customize.Saved);
         return CommandResult.GoBack();
@@ -101,8 +101,9 @@ internal sealed partial class CustomizeForm : FormContent
 
         sb.Append(CultureInfo.InvariantCulture, $"],\"value\":{J(string.Join(",", currentFields))}}}]}},");
 
-        // --- セクション2: 保存クエリ（見出し + 固定既定トグル） ---
-        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"TextBlock\",\"wrap\":true,\"weight\":\"Bolder\",\"spacing\":\"Large\",\"separator\":true,\"text\":{J(Strings.Queries.HubTitle)}}},");
+        // --- セクション2: 表示と動作（見出し + コメント既定順 + 固定既定トグル） ---
+        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"TextBlock\",\"wrap\":true,\"weight\":\"Bolder\",\"spacing\":\"Large\",\"separator\":true,\"text\":{J(Strings.Customize.BehaviorHeader)}}},");
+        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Input.Toggle\",\"id\":\"commentsOldest\",\"title\":{J(Strings.Customize.CommentsOldestToggle)},\"value\":{J(_config.CommentsNewestFirst ? "false" : "true")}}},");
         sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Input.Toggle\",\"id\":\"pinNew\",\"title\":{J(Strings.SettingsUi.PinNewLabel)},\"value\":{J(_config.PinNewQueries ? "true" : "false")}}},");
 
         // --- セクション3: キーバインド（見出し + 開閉ボタン + 1 アクション 1 行。空欄=既定に戻す） ---
@@ -145,6 +146,7 @@ internal sealed partial class CustomizePage : ContentPage
     {
         _config = config;
         _settings = settings;
+        Id = "redmine-customize"; // 安定 Id（top-level キャッシュの重複排除用）
         Title = Strings.Customize.PageTitle;
         Name = Strings.Customize.CommandName;
         Icon = new IconInfo(""); // glyph:E771

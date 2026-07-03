@@ -40,6 +40,7 @@ internal sealed partial class SavedQueryPage : ListPage
         _settings = settings;
         _store = store;
 
+        Id = $"redmine-query-{query.Id}"; // 安定 Id（固定クエリの top-level キャッシュ重複排除用）
         Title = query.Name;
         Name = Strings.Common.Open;
         Icon = new IconInfo(""); // glyph:E71C
@@ -183,7 +184,7 @@ internal sealed partial class SavedQueryPage : ListPage
 
         // Enter=説明・コメントページ / Ctrl+Enter=ブラウザ（固定ペア）。
         var browser = new OpenTicketCommand(url, issue.Id, () => subject, _history);
-        var item = new ListItem(new CommentsPage(issue.Id, _api, _history, () => subject))
+        var item = new ListItem(new CommentsPage(issue.Id, _api, _history, () => subject, _settings.DefaultCommentsNewestFirst))
         {
             Title = $"#{issue.Id} {subject}",
             Subtitle = TicketDetails.Subtitle(issue),

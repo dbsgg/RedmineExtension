@@ -18,6 +18,10 @@ internal sealed class UiConfig
     /// <summary>新しい保存クエリを既定でトップレベルに固定するか。</summary>
     public bool PinNewQueries { get; set; }
 
+    /// <summary>コメントページを既定で古い順に開くか（false=新しい順が既定）。
+    /// 既定を「新しい順」にするため、あえて反転（古い順）を保持する。</summary>
+    public bool CommentsOldestFirst { get; set; }
+
     /// <summary>アクション id → "Ctrl+Shift+K" 形式のキーバインド上書き。未指定は既定。</summary>
     public Dictionary<string, string>? Keybindings { get; set; }
 }
@@ -66,6 +70,18 @@ internal sealed class UiConfigStore
         }
     }
 
+    /// <summary>コメントページの既定並び順が「新しい順」か。</summary>
+    public bool CommentsNewestFirst
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return !_config.CommentsOldestFirst;
+            }
+        }
+    }
+
     /// <summary>アクション id の上書きバインド（"Ctrl+K" 等）。未設定なら null。</summary>
     public string? KeybindingOverride(string actionId)
     {
@@ -76,7 +92,7 @@ internal sealed class UiConfigStore
     }
 
     /// <summary>カスタマイズ一式を保存する（フォームから）。</summary>
-    public void Save(List<string>? detailFields, bool pinNewQueries, Dictionary<string, string>? keybindings)
+    public void Save(List<string>? detailFields, bool pinNewQueries, bool commentsOldestFirst, Dictionary<string, string>? keybindings)
     {
         lock (_lock)
         {
@@ -84,6 +100,7 @@ internal sealed class UiConfigStore
             {
                 DetailFields = detailFields,
                 PinNewQueries = pinNewQueries,
+                CommentsOldestFirst = commentsOldestFirst,
                 Keybindings = keybindings is { Count: > 0 } ? keybindings : null,
             };
 

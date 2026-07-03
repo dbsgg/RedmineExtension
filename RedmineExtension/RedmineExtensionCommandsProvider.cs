@@ -63,7 +63,8 @@ public partial class RedmineExtensionCommandsProvider : CommandProvider
     {
         var commands = new List<ICommandItem>
         {
-            new CommandItem(_mainPage) { Title = DisplayName },
+            // タイトルは動作名にする（DisplayName="Redmine" と同名にすると一覧で二重に見えるため）。
+            new CommandItem(_mainPage) { Title = Strings.Tickets.MainCommandTitle },
         };
 
         // top-level に固定されたクエリを個別コマンドとして並べる（固定はクエリごと）。

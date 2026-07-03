@@ -48,6 +48,9 @@ internal static class Keybindings
     /// <summary>「戻る」キーの表示名（項目の副題などのヒント用）。</summary>
     public static string BackLabel => BindingText("back");
 
+    /// <summary>「保存クエリを追加」キーの表示名（プレースホルダ等のヒント用）。</summary>
+    public static string AddQueryLabel => BindingText("addQuery");
+
     // ---- チケット操作（番号検索・履歴・クエリ結果・コメントページで共通） ----
     public static KeyChord CopyLink => Resolve("copyLink");
     public static KeyChord Refresh => Resolve("refresh");

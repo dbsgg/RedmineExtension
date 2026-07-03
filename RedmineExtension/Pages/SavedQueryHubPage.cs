@@ -43,10 +43,11 @@ internal sealed partial class SavedQueryHubPage : ListPage
         _history = history;
         _settings = settings;
 
+        Id = "redmine-saved-queries"; // 安定 Id（top-level キャッシュの重複排除用）
         Title = Strings.Queries.HubTitle;
         Name = Strings.Common.Open;
         Icon = new IconInfo(""); // glyph:E71C
-        PlaceholderText = Strings.Queries.HubPlaceholder;
+        PlaceholderText = Strings.Queries.HubPlaceholder(Keybindings.AddQueryLabel);
 
         _items = [new ListItem(new NoOpCommand()) { Title = Strings.Common.Loading }];
 

@@ -42,6 +42,9 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
     public RedmineExtensionPage(SettingsManager settings, RedmineApi api, TicketHistory history, SavedQueryHubPage hub, CustomizePage customize, UiConfigStore uiConfig)
     {
         Icon = new IconInfo("");
+        // 安定 Id。CmdPal は top-level コマンドをキャッシュし Id で実体と重複排除するため、
+        // Id を欠くと再読み込み・再デプロイのたびに項目が二重に出る。
+        Id = "redmine-main";
         Title = "Redmine";
         Name = Strings.Common.Open;
         PlaceholderText = Strings.Tickets.SearchPlaceholder;
@@ -115,7 +118,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
         var url = _api.IssueUrl(id);
         // Enter=説明・コメントページ / Ctrl+Enter=ブラウザ（固定ペア）。
         var browser = new OpenTicketCommand(url, id, () => TitleFor(id), _history);
-        var item = new ListItem(new CommentsPage(id, _api, _history, () => _subjects.GetValueOrDefault(id)))
+        var item = new ListItem(new CommentsPage(id, _api, _history, () => _subjects.GetValueOrDefault(id), _settings.DefaultCommentsNewestFirst))
         {
             Title = ComposeTitle(id),
             Subtitle = string.Empty,
@@ -255,7 +258,7 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
 
         // Enter=説明・コメントページ / Ctrl+Enter=ブラウザ（固定ペア）。
         var browser = new OpenTicketCommand(url, entry.Id, () => TitleFor(entry.Id) ?? title, _history);
-        var item = new ListItem(new CommentsPage(entry.Id, _api, _history, () => TitleFor(entry.Id) ?? title))
+        var item = new ListItem(new CommentsPage(entry.Id, _api, _history, () => TitleFor(entry.Id) ?? title, _settings.DefaultCommentsNewestFirst))
         {
             Title = label,
             Subtitle = string.Empty,

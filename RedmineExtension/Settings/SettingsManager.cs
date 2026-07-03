@@ -7,13 +7,13 @@ using Microsoft.CommandPalette.Extensions.Toolkit;
 namespace RedmineExtension;
 
 /// <summary>
-/// 接続系の設定を管理する。トーキットの <see cref="Settings"/> を内包し、
-/// 型付きアクセサを公開する(add-extension-settings スキル準拠)。
-/// 設定ページは接続に必要な最小限（URL / API キー / 履歴件数 / 件数TTL）に留め、
+/// 接続系の設定を管理する。トーキットの <see cref="JsonSettingsManager"/> を継承して
+/// LocalState の JSON へ永続化する（これが無いと URL 等が再起動でメモリごと消える）。
+/// 設定ページは接続に必要な最小限（URL / API キー / 履歴件数 / 件数TTL / コメント既定順）に留め、
 /// 表示・キーバインドのカスタマイズは <see cref="UiConfigStore"/>（カスタマイズフォーム）が持つ。
 /// API キーのみ設定 JSON ではなく Windows 資格情報マネージャに保存する。
 /// </summary>
-internal sealed class SettingsManager
+internal sealed partial class SettingsManager : JsonSettingsManager
 {
     private const string ServerUrlKey = "redmineServerUrl";
     private const string ApiKeyKey = "redmineApiKey";
@@ -24,7 +24,6 @@ internal sealed class SettingsManager
     private readonly int _defaultHistoryCount = 10;
     private readonly int _maxHistoryCount = 50;
 
-    private readonly Settings _settings = new();
     private readonly TextSetting _apiKeySetting;
     private readonly ChoiceSetSetting _historyCountSetting;
     private readonly ChoiceSetSetting _countTtlSetting;
@@ -34,7 +33,13 @@ internal sealed class SettingsManager
     {
         _uiConfig = uiConfig;
 
-        _settings.Add(new TextSetting(ServerUrlKey, string.Empty)
+        // 永続化先。他ストア同様 LocalState 配下（取得できない場合は既定のまま＝メモリのみ）。
+        if (TryGetSettingsPath() is { } path)
+        {
+            FilePath = path;
+        }
+
+        Settings.Add(new TextSetting(ServerUrlKey, string.Empty)
         {
             Label = Strings.SettingsUi.ServerUrlLabel,
             Description = Strings.SettingsUi.ServerUrlDescription,
@@ -48,7 +53,7 @@ internal sealed class SettingsManager
             Description = Strings.SettingsUi.ApiKeyDescription,
             Placeholder = Strings.SettingsUi.ApiKeyPlaceholder,
         };
-        _settings.Add(_apiKeySetting);
+        Settings.Add(_apiKeySetting);
 
         // 端数に意味が薄い数値はコンボボックスで選択肢を提示する。
         _historyCountSetting = new ChoiceSetSetting(HistoryCountKey, Choices(
@@ -62,7 +67,7 @@ internal sealed class SettingsManager
             Label = Strings.SettingsUi.HistoryCountLabel,
             Description = Strings.SettingsUi.HistoryCountDescription,
         };
-        _settings.Add(_historyCountSetting);
+        Settings.Add(_historyCountSetting);
 
         _countTtlSetting = new ChoiceSetSetting(CountTtlKey, Choices(
             (Strings.SettingsUi.Minutes(5), "5"),
@@ -74,13 +79,29 @@ internal sealed class SettingsManager
             Label = Strings.SettingsUi.CountTtlLabel,
             Description = Strings.SettingsUi.CountTtlDescription,
         };
-        _settings.Add(_countTtlSetting);
+        Settings.Add(_countTtlSetting);
 
-        // コンボの既定値（未保存時に先頭項目へ倒れないよう明示する）。
+        // コンボの既定値（LoadSettings 前に設定。保存値があれば下の LoadSettings が上書きする）。
         _historyCountSetting.Value = _defaultHistoryCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _countTtlSetting.Value = "30";
 
-        _settings.SettingsChanged += OnSettingsChanged;
+        // 保存済みの値を読み込む（FilePath が null なら何もしない＝既定のまま）。
+        LoadSettings();
+
+        Settings.SettingsChanged += OnSettingsChanged;
+    }
+
+    private static string? TryGetSettingsPath()
+    {
+        try
+        {
+            var dir = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+            return System.IO.Path.Combine(dir, "redmine-settings.json");
+        }
+        catch
+        {
+            return null; // 非パッケージ実行など LocalState を取れない場合はメモリのみ。
+        }
     }
 
     private static List<ChoiceSetSetting.Choice> Choices(params (string Title, string Value)[] entries)
@@ -94,12 +115,9 @@ internal sealed class SettingsManager
         return list;
     }
 
-    /// <summary>CommandProvider の Settings に渡す。設定ページは自動生成される。</summary>
-    public ICommandSettings Settings => _settings;
-
     /// <summary>未設定時に設定ページへ誘導する一覧項目（Enter で設定を開く）。</summary>
     public IListItem SettingsPrompt() =>
-        new ListItem(_settings.SettingsPage)
+        new ListItem(Settings.SettingsPage)
         {
             Title = Strings.Setup.RequiredTitle,
             Subtitle = Strings.Setup.RequiredSubtitle,
@@ -107,10 +125,10 @@ internal sealed class SettingsManager
         };
 
     /// <summary>自動生成された設定ページ。未設定時の誘導などからナビゲートに使う。</summary>
-    public IContentPage SettingsPage => _settings.SettingsPage;
+    public IContentPage SettingsPage => Settings.SettingsPage;
 
     public string ServerUrl =>
-        (_settings.GetSetting<string>(ServerUrlKey) ?? string.Empty).Trim().TrimEnd('/');
+        (Settings.GetSetting<string>(ServerUrlKey) ?? string.Empty).Trim().TrimEnd('/');
 
     // API キーは資格情報マネージャから取得する。
     public string ApiKey =>
@@ -129,6 +147,9 @@ internal sealed class SettingsManager
     public TimeSpan CountTtl =>
         TimeSpan.FromMinutes(int.TryParse(_countTtlSetting.Value, out var minutes) && minutes > 0 ? minutes : 30);
 
+    /// <summary>コメントページの既定並び順が「新しい順」か（カスタマイズで変更。Ctrl+O のセッション切替の初期値）。</summary>
+    public bool DefaultCommentsNewestFirst => _uiConfig.CommentsNewestFirst;
+
     /// <summary>新しい保存クエリを既定でトップレベルに固定するか（カスタマイズで変更）。</summary>
     public bool PinNewQueriesByDefault => _uiConfig.PinNewQueries;
 
@@ -141,11 +162,15 @@ internal sealed class SettingsManager
     private void OnSettingsChanged(object sender, Settings args)
     {
         // 入力された API キーを資格情報マネージャへ移し、平文を入力欄に残さない。
+        // （SaveSettings より前に消すことで JSON にキーが書かれない＝ハードルール順守）
         var entered = _apiKeySetting.Value;
         if (!string.IsNullOrWhiteSpace(entered))
         {
             CredentialStore.Save(_apiKeyCredentialTarget, entered.Trim());
             _apiKeySetting.Value = string.Empty;
         }
+
+        // URL・件数・順序などを JSON へ永続化する（FilePath が null ならメモリのみ）。
+        SaveSettings();
     }
 }

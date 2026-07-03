@@ -132,9 +132,23 @@ These are non-negotiable; violating them breaks the build gate or the security m
   `ExtensionHost.ShowStatus`) and return `GoBack`/`KeepOpen` immediately.
 - **Two settings surfaces.** The CmdPal settings page (`SettingsManager`) holds connection
   essentials only (URL / API key / history count / count TTL) so the first-run prompt stays
-  lean. Everything cosmetic or behavioral (default detail-pane fields, pin-new default, all
-  keybindings) lives in the customize form (`CustomizeForm` → `UiConfigStore`,
-  `ui-config.json`). Don't add settings to the settings page unless they're required to connect.
+  lean. Everything cosmetic or behavioral (default detail-pane fields, default comment order,
+  pin-new default, all keybindings) lives in the customize form (`CustomizeForm` →
+  `UiConfigStore`, `ui-config.json`), reachable from the main page once configured. Don't add
+  settings to the settings page unless required to connect.
+- **Don't hardcode remappable key names in UI strings.** Keys shown in hints/placeholders must
+  come from `Keybindings.BindingText(id)` (or a label accessor like `Keybindings.AddQueryLabel`/
+  `BackLabel`) so custom bindings stay accurate. Literal `Enter`/`Ctrl+Enter` are fine (fixed,
+  non-remappable pair); the keybinding-format help text is also literal by nature.
+- **`SettingsManager` MUST inherit `JsonSettingsManager` to persist.** The toolkit `Settings`
+  object alone is in-memory only — the host does *not* auto-persist it (the
+  add-extension-settings skill doc is misleading on this). Persistence requires
+  `JsonSettingsManager`: set `FilePath` (LocalState `redmine-settings.json`), set combo
+  defaults, call `LoadSettings()` in the ctor, and `SaveSettings()` from `SettingsChanged`.
+  The API key is cleared from the setting and moved to Credential Manager *before*
+  `SaveSettings()`, so it never lands in the JSON. Stable top-level command `Id`s
+  (`redmine-main`/`-saved-queries`/`-customize`/`-query-{id}`) are also required so CmdPal's
+  provider cache dedupes across reloads instead of showing duplicate entries.
 - **Keep git history linear.** Work on a feature branch, squash into a coherent commit
   (`git merge --squash` or `git reset --soft main`), then fast-forward into `main`. Avoid merge branches.
 

@@ -29,13 +29,14 @@ internal sealed partial class CommentsPage : ListPage
     private static readonly IconInfo CommentIcon = new IconInfo(""); // glyph:E90A
     private static readonly IconInfo DescriptionIcon = new IconInfo(""); // glyph:E8A5
 
-    // 並び順（true=新しい順）。セッション内の全コメントページで共有・記憶する。
-    private static bool _newestFirst = true;
+    // Ctrl+O によるセッション内の並び順上書き（null=未操作＝グローバル既定に従う）。
+    private static bool? _sessionOrder;
 
     private readonly int _id;
     private readonly RedmineApi _api;
     private readonly TicketHistory _history;
     private readonly Func<string?> _titleProvider;
+    private readonly bool _defaultNewestFirst;
 
     private IListItem[] _items;
     private IssueThread? _thread;
@@ -43,12 +44,16 @@ internal sealed partial class CommentsPage : ListPage
     private bool _loading;
     private bool _recorded;
 
-    public CommentsPage(int id, RedmineApi api, TicketHistory history, Func<string?> titleProvider)
+    // 実際の並び順: セッション操作があればそれ、無ければグローバル既定。
+    private bool NewestFirst => _sessionOrder ?? _defaultNewestFirst;
+
+    public CommentsPage(int id, RedmineApi api, TicketHistory history, Func<string?> titleProvider, bool defaultNewestFirst)
     {
         _id = id;
         _api = api;
         _history = history;
         _titleProvider = titleProvider;
+        _defaultNewestFirst = defaultNewestFirst;
 
         Id = $"redmine-comments-{id}";
         Title = Strings.Comments.PageTitle(id);
@@ -137,7 +142,7 @@ internal sealed partial class CommentsPage : ListPage
             comments.Add(BuildCommentItem(thread.Comments[i], i + 1, total));
         }
 
-        if (_newestFirst)
+        if (NewestFirst)
         {
             // 新しい順: 最新コメント → … → 最初のコメント → 説明（時系列降順で一貫させる）。
             comments.Reverse();
@@ -151,39 +156,48 @@ internal sealed partial class CommentsPage : ListPage
         var description = BuildDescriptionItem(descEntry, thread.Issue);
 
         // 古い順のときは説明（最古）が先頭、新しい順のときは末尾に来る。
-        if (!_newestFirst)
+        if (!NewestFirst)
         {
             items.Add(description);
         }
 
         items.AddRange(comments);
 
-        if (_newestFirst)
+        if (NewestFirst)
         {
             items.Add(description);
         }
 
         // 末尾に簡易操作と戻る導線（Esc が「閉じる」設定でも戻れるように）。
-        items.Add(new ListItem(new AddCommentPage(_api, _id)) { Title = Strings.Comments.AddCommentItem });
+        items.Add(new ListItem(new AddCommentPage(_api, _id))
+        {
+            Title = Strings.Comments.AddCommentItem,
+            Icon = new IconInfo(""), // glyph:E710
+        });
         items.Add(Navigation.BackItem());
 
         return items.ToArray();
     }
 
     // コメント項目。タイトルに通番「n/総数」を入れて位置が一目でわかるようにする。
+    // Details は 本文 → 区切り(---) → 投稿者・日時を各行、で説明項目と体裁を揃える。
     private ListItem BuildCommentItem(IssueComment entry, int number, int total)
     {
         var label = Strings.Comments.CommentLabel(number, total);
-        var detailByline = Append(
-            string.IsNullOrEmpty(entry.Author) ? Strings.Comments.UnknownAuthor : entry.Author,
-            FormatDate(entry.CreatedOn, withTime: true));
-
         return BuildEntryItem(
             entry,
             label,
             CommentIcon,
             detailsTitle: Strings.Comments.DetailTitle(_id, label),
-            detailsBody: $"{entry.Notes}\n\n— {detailByline}");
+            detailsBody: $"{entry.Notes}\n\n---\n\n{Byline(entry)}");
+    }
+
+    // 投稿者と日時を「**ラベル**: 値」で1行ずつ（FieldLines と同じ体裁）。
+    private static string Byline(IssueComment entry)
+    {
+        var author = string.IsNullOrEmpty(entry.Author) ? Strings.Comments.UnknownAuthor : entry.Author;
+        var date = FormatDate(entry.CreatedOn, withTime: true);
+        return $"**{Strings.Comments.PostedBy}**: {author}\n\n**{Strings.Comments.PostedAt}**: {date}\n\n";
     }
 
     // 説明（チケット本文）の項目。コメントとはアイコンを変えて区別する。
@@ -251,17 +265,17 @@ internal sealed partial class CommentsPage : ListPage
     private CommandContextItem OrderToggleContext() =>
         new(new AnonymousCommand(ToggleOrder)
         {
-            Name = _newestFirst ? Strings.Comments.ShowOldestFirst : Strings.Comments.ShowNewestFirst,
+            Name = NewestFirst ? Strings.Comments.ShowOldestFirst : Strings.Comments.ShowNewestFirst,
             Result = CommandResult.KeepOpen(),
         })
         {
             RequestedShortcut = Keybindings.ToggleOrder,
         };
 
-    // 並び順を反転し、表示中のスレッドを組み直す（再取得はしない）。
+    // 並び順を反転し、表示中のスレッドを組み直す（再取得はしない）。セッション内で記憶する。
     private void ToggleOrder()
     {
-        _newestFirst = !_newestFirst;
+        _sessionOrder = !NewestFirst;
         if (_thread is not null)
         {
             _items = BuildThreadItems(_thread);

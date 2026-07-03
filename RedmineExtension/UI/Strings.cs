@@ -56,6 +56,10 @@ internal static class Strings
     /// <summary>番号検索・履歴（メインページ）とチケット項目。</summary>
     internal static class Tickets
     {
+        // トップレベルのメインコマンド名。拡張表示名(DisplayName="Redmine")と重複して
+        // 見えないよう、動作を表す固有の名前にする。
+        public static readonly string MainCommandTitle = T("チケットを開く", "Open a ticket");
+
         public static readonly string SearchPlaceholder = T(
             "チケット番号を入力（番号の後にスペースでタイトル表示）",
             "Type an issue number (add a space to fetch the title)");
@@ -86,6 +90,8 @@ internal static class Strings
         public static readonly string FilterPlaceholder = T("説明・コメントを絞り込み", "Filter description & comments");
         public static readonly string DescriptionLabel = T("説明", "Description");
         public static readonly string UnknownAuthor = T("（不明）", "(unknown)");
+        public static readonly string PostedBy = T("投稿者", "Posted by");
+        public static readonly string PostedAt = T("日時", "Date");
         public static readonly string NoDescription = T("（説明なし）", "(no description)");
         public static readonly string AddCommentItem = T("コメントを追加", "Add a comment");
 
@@ -111,8 +117,9 @@ internal static class Strings
         public static readonly string HubTitle = T("保存クエリ", "Saved queries");
         public static readonly string HubSubtitle = T("保存クエリの一覧・件数・追加", "List, counts, and add saved queries");
 
-        public static readonly string HubPlaceholder =
-            T("保存クエリを選択（Ctrl+N で追加）", "Select a saved query (Ctrl+N to add)");
+        // 追加キーは再割当可能なので、表記は Keybindings.AddQueryLabel を埋め込む。
+        public static string HubPlaceholder(string addKey) =>
+            T($"保存クエリを選択（{addKey} で追加）", $"Select a saved query ({addKey} to add)");
 
         public static readonly string AddTitle = T("保存クエリを追加", "Add a saved query");
         public static readonly string RefreshCount = T("件数を最新に更新", "Refresh the count");
@@ -232,6 +239,12 @@ internal static class Strings
         public static readonly string SaveHint = T(
             "保存後、開いているページには再表示時に反映されます。",
             "Changes apply when pages are reopened.");
+
+        public static readonly string BehaviorHeader = T("表示と動作", "Display & behavior");
+
+        public static readonly string CommentsOldestToggle = T(
+            "コメントを既定で古い順に表示する（新しい順が既定）",
+            "Show comments oldest-first by default (newest-first otherwise)");
 
         public static readonly string Submit = T("保存", "Save");
         public static readonly string Saved = T("カスタマイズを保存しました", "Customization saved");
