@@ -89,17 +89,25 @@ winget install Microsoft.WingetCreate
 
 ## A-3. MSIX バンドルを生成
 
+提出物は初版 **1.0.0**。掲載文の下書きは `STORE-LISTING.md`。生成方法は2通り。
+
+**推奨: CI（公式 SDK・トリミング有効＝小さいパッケージ）**
+- 事前に Actions の Variables に予約値を登録: `STORE_IDENTITY_NAME` / `STORE_PUBLISHER`
+- GitHub → Actions → **Store package** → Run workflow（version=1.0.0）→ 生成された
+  `store-msixbundle-1.0.0` アーティファクトをダウンロード（`.github/workflows/store-package.yml`）
+
+**ローカル**
 ```powershell
 # 予約済み Identity を注入して Store 用バンドルを作る（署名なし。Store 側で署名される）
-.\build-msix.ps1 -Version X.Y.Z -IdentityName <予約Name> -Publisher "<予約Publisher>"
-# → MsixPackages\RedmineExtension_X.Y.Z.0_Bundle.msixbundle
+.\build-msix.ps1 -Version 1.0.0 -IdentityName <予約Name> -Publisher "<予約Publisher>"
+# → MsixPackages\RedmineExtension_1.0.0.0_Bundle.msixbundle
 ```
 
 - スクリプトはビルド中だけ `Package.appxmanifest` の Identity/Version を書き換え、**終了時に必ず復元**する。
 - `makeappx.exe` は PATH / Windows Kits から自動検出。
-- **トリミングについて**: 既定はトリミング有効（小さいパッケージ）。ただし scoop 版 .NET SDK など
+- **トリミングについて**: 既定は有効（小さいパッケージ）。ただし scoop 版 .NET SDK など
   ILLink のタスクホスト生成に失敗する環境では `-NoTrim` を付ける（パッケージは大きくなる）。
-  **最終的な Store 提出物はトリミング有効（CI もしくは公式 SDK 環境）で作ることを推奨**。
+  この理由から**最終提出物は CI での生成を推奨**。
 
 ## A-4. Partner Center へ提出
 

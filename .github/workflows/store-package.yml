@@ -1,0 +1,53 @@
+name: Store package
+
+# Microsoft Store 提出用の署名なし .msixbundle を公式 SDK でビルドする（手動実行）。
+# 公式 SDK 環境ではトリミングが効くため、ローカル(scoop 等)より小さいパッケージになる。
+# 予約済み Store Identity はリポジトリに焼き込まず、リポジトリ変数から注入する:
+#   Settings → Secrets and variables → Actions → Variables:
+#     STORE_IDENTITY_NAME  例: 12345Publisher.RedmineForCommandPalette
+#     STORE_PUBLISHER      例: CN=ABCD1234-....
+# 変数が未設定ならマニフェスト既定のまま（テスト用パッケージ）でビルドする。
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (x.y.z)'
+        required: true
+        default: '1.0.0'
+      no_trim:
+        description: 'Disable trimming (larger package; only if the trimmed build fails)'
+        type: boolean
+        default: false
+
+jobs:
+  package:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build MSIX bundle
+        run: |
+          $params = @{
+            Version      = '${{ inputs.version }}'
+            IdentityName = '${{ vars.STORE_IDENTITY_NAME }}'
+            Publisher    = '${{ vars.STORE_PUBLISHER }}'
+          }
+          if ('${{ inputs.no_trim }}' -eq 'true') { $params.NoTrim = $true }
+          .\build-msix.ps1 @params
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-msixbundle-${{ inputs.version }}
+          path: |
+            MsixPackages/*.msixbundle
+            MsixPackages/*.msix
+          if-no-files-found: error

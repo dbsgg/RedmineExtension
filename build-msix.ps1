@@ -26,7 +26,7 @@
 #>
 
 param(
-    [string]$Version = "0.0.1",
+    [string]$Version = "1.0.0",
     [string]$IdentityName,
     [string]$Publisher,
     [switch]$NoTrim
