@@ -43,7 +43,7 @@ internal sealed partial class SettingsManager : JsonSettingsManager
         {
             Label = Strings.SettingsUi.ServerUrlLabel,
             Description = Strings.SettingsUi.ServerUrlDescription,
-            Placeholder = "http://redmine/example",
+            Placeholder = "http://redmine/",
             IsRequired = true,
         });
 

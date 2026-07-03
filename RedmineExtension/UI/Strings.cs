@@ -285,7 +285,7 @@ internal static class Strings
     internal static class SettingsUi
     {
         public static readonly string ServerUrlLabel = "Redmine URL";
-        public static readonly string ServerUrlDescription = T("例: http://redmine/example", "e.g. http://redmine/example");
+        public static readonly string ServerUrlDescription = T("例: http://redmine/", "e.g. http://redmine/");
         public static readonly string ApiKeyLabel = "API access key";
 
         public static readonly string ApiKeyDescription = T(

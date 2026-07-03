@@ -46,7 +46,7 @@
 
 拡張機能の **設定** を開き、以下を入力します。
 
-- **Redmine URL** — 例: `https://redmine.example.com`
+- **Redmine URL** — Redmine のベース URL。例: `http://redmine/`
 - **API アクセスキー** — 個人の Redmine REST API キー。**Windows 資格情報マネージャー**
   （汎用資格情報、ユーザーごとに DPAPI 暗号化）に保存され、平文では保持されません。
 - **履歴の表示件数** — 直近チケットの表示数（0〜50、ドロップダウン）。
