@@ -16,7 +16,9 @@
        winget 配布（EXE / unpackaged）ではこの Identity は使われない。 -->
 
   <Properties>
-    <DisplayName>Redmine</DisplayName>
+    <!-- Store の予約済みアプリ名と完全一致が必須（パレット内の表示名はコード側の
+         RedmineExtensionCommandsProvider.DisplayName="Redmine" で別管理）。 -->
+    <DisplayName>Redmine for Command Palette</DisplayName>
     <PublisherDisplayName>dbsgg</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -35,7 +37,7 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="Redmine"
+        DisplayName="Redmine for Command Palette"
         Description="Work with Redmine from the Command Palette: open issues by number, copy rich issue links, read descriptions and comments, run saved queries, and make quick status or comment edits."
         AppListEntry="none"
         BackgroundColor="transparent"
