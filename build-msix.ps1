@@ -13,6 +13,9 @@
     Partner Center の Package/Identity/Name。指定時のみ上書き。
 .PARAMETER Publisher
     Partner Center の Package/Identity/Publisher（例: "CN=1234ABCD-..."）。指定時のみ上書き。
+.PARAMETER PublisherDisplayName
+    Partner Center の「発行者の表示名」（Package/Properties/PublisherDisplayName）。
+    アカウントの表示名と完全一致が必須（不一致だと提出時に検証エラー）。指定時のみ上書き。
 .PARAMETER NoTrim
     トリミング/単一ファイルを無効化する。ILLink のタスクホスト生成に失敗する環境
     （scoop 版 .NET SDK 等）でのローカル検証用。既定はトリミング有効（CI/公式 SDK 向け、
@@ -29,6 +32,7 @@ param(
     [string]$Version = "1.0.0",
     [string]$IdentityName,
     [string]$Publisher,
+    [string]$PublisherDisplayName,
     [switch]$NoTrim
 )
 
@@ -66,6 +70,10 @@ $ns.AddNamespace("d", "http://schemas.microsoft.com/appx/manifest/foundation/win
 $xml.SelectSingleNode("//d:Identity", $ns).Version = $version4
 if ($IdentityName) { $xml.SelectSingleNode("//d:Identity", $ns).Name = $IdentityName }
 if ($Publisher) { $xml.SelectSingleNode("//d:Identity", $ns).Publisher = $Publisher }
+# PublisherDisplayName は Partner Center アカウントの「発行者の表示名」と完全一致が必須。
+if ($PublisherDisplayName) {
+    $xml.SelectSingleNode("//d:Properties/d:PublisherDisplayName", $ns).InnerText = $PublisherDisplayName
+}
 $xml.Save((Resolve-Path $manifest))
 
 # Store 提出用の共通プロパティ。
