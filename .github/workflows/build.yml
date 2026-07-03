@@ -15,16 +15,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
       # Debug ビルドはトリム/AOT/single-file アナライザーを有効化しており、
       # 警告 1 件でも失敗する（リポジトリのハードルール）。
       # APPX1707 は CmdPal SDK の winmd に対する MSIX パッケージング基盤の既知ノイズ
-      # （Implementation メタデータ無し）で、コード品質と無関係のため昇格対象から除外。
+      # （Implementation メタデータ無し）で、コード品質と無関係。メッセージへ降格して
+      # warnaserror の対象から外しつつ、注釈も出さないようにする。
       - name: Build (Debug, analyzers as errors)
-        run: dotnet build RedmineExtension.sln -c Debug -p:Platform=${{ matrix.platform }} -warnaserror -p:MSBuildWarningsNotAsErrors=APPX1707
+        run: dotnet build RedmineExtension.sln -c Debug -p:Platform=${{ matrix.platform }} -warnaserror -p:MSBuildWarningsAsMessages=APPX1707

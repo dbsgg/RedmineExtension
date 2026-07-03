@@ -77,12 +77,14 @@ if ($PublisherDisplayName) {
 $xml.Save((Resolve-Path $manifest))
 
 # Store 提出用の共通プロパティ。
+# APPX1707（CmdPal SDK winmd の既知ノイズ）はメッセージへ降格し、ログを汚さない。
 $common = @(
     "-c", "Release",
     "-p:GenerateAppxPackageOnBuild=true",
     "-p:AppxBundle=Never",
     "-p:UapAppxPackageBuildMode=SideloadOnly",
-    "-p:AppxPackageSigningEnabled=false"
+    "-p:AppxPackageSigningEnabled=false",
+    "-p:MSBuildWarningsAsMessages=APPX1707"
 )
 if ($NoTrim) {
     $common += @("-p:PublishTrimmed=false", "-p:PublishSingleFile=false")
