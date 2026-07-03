@@ -1,196 +1,143 @@
-# 公開手順（GitHub public 化 → winget 掲載）
+# Releasing / Publishing
 
-> ## ⚠️ 重要な訂正（2026-07-03 調査結果）
->
-> 当初計画していた **unpackaged EXE 方式（Inno Setup + HKCU CLSID 登録）は CmdPal に発見されない**。
-> - CmdPal の拡張発見は `AppExtensionCatalog.Open("com.microsoft.commandpalette")` のみ
->   （`WinRTExtensionService.cs`）。**MSIX パッケージの appExtension 宣言が唯一の発見経路**。
-> - レジストリ（CLSID/InprocServer32/LocalServer32）を列挙する実装は PowerToys リポジトリの
->   どこにも存在しない。この方式を案内している
->   `.github/skills/publish-extension/references/winget-publishing.md` は
->   **公式拡張テンプレート由来の誤ドキュメント**（実装と不一致。リポジトリ全検索で確認済み）。
-> - 実機でも確認済み: インストーラー自体は動くが、登録しても CmdPal には現れない。
->
-> 従って **公開は MSIX（署名付き）経路** で行う。`setup.iss` / `build-exe.ps1` /
-> release.yml の EXE 生成は「CmdPal 発見不可」の注記付きで残置（他用途・将来の仕様変更に備え）。
+Maintainer guide for distributing this Command Palette extension.
 
-## 配布経路の選択肢（MSIX 前提）
+Command Palette discovers extensions **only through their MSIX `appExtension` registration**
+(`AppExtensionCatalog.Open("com.microsoft.commandpalette")`). An unpackaged EXE installer that
+merely registers a COM server in the registry installs fine but is **not** picked up by the
+palette. Distribution therefore uses a **signed MSIX** via the Microsoft Store (recommended) or
+winget. The EXE pipeline (`build-exe.ps1` / `setup.iss`) is kept only as a build reference.
 
-| 経路 | 費用 | 手間 | 備考 |
-|---|---|---|---|
-| **A. Microsoft Store（推奨）** | 個人 $19（買い切り） | 中 | Store が署名を肩代わり。`winget search -s msstore` でも入る。手順は `.github/skills/publish-extension/references/store-publishing.md` |
-| B. winget-pkgs + 署名済み MSIX | Azure Trusted Signing 月額約 $10 | 中 | 自前 Release に .msix を置き `InstallerType: msix` で提出。CmdPal のブラウズ（`windows-commandpalette-extension` タグ）にも載せられる |
-| C. サイドロード（開発者向け） | 無料 | 低 | 未署名 MSIX + 開発者モード必須。一般配布には不向き。README に手順を書く補助チャネル |
+## Distribution routes
 
-以下の手順書は経路が確定するまでの共通部分（public 化・タグ運用）と、旧 EXE 手順の記録。
+| Route | Cost | Notes |
+|---|---|---|
+| **A. Microsoft Store (recommended)** | Individual dev account, one-time fee | The Store signs the package for you; also reachable via `winget search -s msstore`. |
+| B. winget-pkgs + self-signed/-signed MSIX | Code-signing cert | Host a signed `.msix` on a GitHub Release and submit with `InstallerType: msix`. Also lets you appear in the palette's browse experience via the `windows-commandpalette-extension` tag. |
 
-## 現状の検証済み事項
-
-| 項目 | 状態 |
-|---|---|
-| CLSID 一致（`RedmineExtension.cs` の `[Guid]` = `Package.appxmanifest` = `setup.iss`） | ✅ `f0824b2a-3b8d-4e2f-bfa7-26b3b7b8e61e` |
-| LICENSE (MIT) / README / CONTRIBUTING / CLAUDE.md | ✅ |
-| マニフェスト Publisher（`CN=dbsgg`）・バージョン 0.0.1.0 | ✅ |
-| CI（push/PR で警告ゼロビルド） | ✅ `.github/workflows/build.yml` |
-| リリース自動化（tag → インストーラー → Release → winget PR） | ✅ `.github/workflows/release.yml` |
-| `.gitignore`（`Installer/`・`publish/` を除外） | ✅ |
-| unpackaged 発行の設定切替（csproj の `WindowsPackageType==None` 条件で pubxml 無効化＋フレームワーク依存・トリミング/単一ファイル/R2R 無効） | ✅ |
-| ローカルでのインストーラー生成（x64/arm64、winget 版 Inno Setup 自動検出） | ✅ `Installer\RedmineExtension_0.0.1_{x64,arm64}.exe` 生成確認済み |
-| **Store 用 MSIX バンドル生成（x64/ARM64 → .msixbundle、makeappx 自動検出、版数整合、マニフェスト自動復元）** | ✅ `build-msix.ps1` で `MsixPackages\*.msixbundle` 生成確認済み |
-| 秘密情報（API キー等）がリポジトリに無いこと | ✅ 資格情報マネージャのみ |
-
-## 検証済み・結論が出た項目（追記）
-
-1. ~~LocalServer32 登録で CmdPal が拡張を発見できるか~~ → **発見されない（確定）**。
-   冒頭の訂正参照。EXE 経路は公開チャネルとしては廃止。
-2. 残る実機確認: 署名済み（または dev モード＋未署名）**MSIX をインストールした場合の動作**
-   （VS Deploy では動作済みのため、パッケージ経由でも動く見込みが高い）。
-3. arm64 ビルド（ローカルに arm64 機が無ければ CI 産物をそのまま信頼しない）。
-
-## 0. 一度だけの準備
+## Prerequisites
 
 ```powershell
-# ツール（Inno Setup はどの方法で入れてもよい。build-exe.ps1 が
-# PATH / レジストリ / 既定の場所から ISCC.exe を自動検出する。
-# 特殊な場所に置いた場合のみ -IsccPath か環境変数 ISCC_PATH で指定）
-winget install JRSoftware.InnoSetup    # または choco install innosetup
-winget install Microsoft.WingetCreate
+# For local MSIX bundling, the Windows SDK (makeappx) is required; it ships with Visual Studio
+# or the standalone Windows SDK. build-msix.ps1 auto-detects makeappx.
 
-# GitHub リポジトリ
-#  - Settings → General → リポジトリを Public に変更
-#  - Settings → Secrets and variables → Actions:
-#      Secret   WINGET_PAT      … public_repo スコープの PAT（winget-pkgs へ PR するため）
-#      Variable WINGET_ENABLED  … "true"（release.yml の winget-update ジョブ有効化。初回提出後に設定）
+# For the optional winget route:
+winget install Microsoft.WingetCreate
 ```
+
+Repo settings for the winget automation (optional, route B):
+
+- Actions → Variables: `WINGET_ENABLED = true` (enables the winget-update job in `release.yml`)
+- Actions → Secrets: `WINGET_PAT` — a PAT with `public_repo` scope for PRs to `winget-pkgs`
 
 ---
 
-# 経路 A: Microsoft Store 公開（推奨・メイン手順）
+# Route A — Microsoft Store
 
-## A-1. Partner Center の準備（ユーザー作業。ここは自動化不可）
+## A-1. Partner Center setup
 
-1. [Partner Center](https://partner.microsoft.com/dashboard/home) で開発者登録（個人 $19 買い切り）。
-2. **アプリとゲーム → 新しい製品 → MSIX または PWA アプリ** でアプリ名を予約
-   （例: `Redmine for Command Palette`）。
-3. **製品管理 → 製品 ID** を開き、次の 3 値を控える:
-   - **Package/Identity/Name**（例: `12345Publisher.RedmineForCommandPalette`）
-   - **Package/Identity/Publisher**（例: `CN=ABCD1234-...`）
+1. Register a developer account at [Partner Center](https://partner.microsoft.com/dashboard/home).
+2. **Apps and Games → New product → MSIX or PWA app** and reserve an app name
+   (e.g. `Redmine for Command Palette`).
+3. Open **Product management → Product identity** and note these three values:
+   - **Package/Identity/Name** (e.g. `Publisher.RedmineForCommandPalette`)
+   - **Package/Identity/Publisher** (e.g. `CN=...`)
    - **Package/Properties/PublisherDisplayName**
 
-> これらの予約値はリポジトリに焼き込まない。`build-msix.ps1` の引数で注入する（下記）。
+> Keep these reserved values out of the repo — inject them as `build-msix.ps1` arguments
+> (or the CI variables below).
 
-## A-2. Store アートワーク（未対応・要作業）
+## A-2. Store assets (must be prepared)
 
-現状 `RedmineExtension/Assets/` はテンプレートの仮ロゴ。Store 掲載には以下が必要:
+The `RedmineExtension/Assets/` folder currently holds template placeholder logos. A Store
+listing needs:
 
-- [ ] 正式なアプリロゴ（44x44 / 150x150 / 310x150 / StoreLogo など。1 枚の高解像度から生成可）
-- [ ] Store 掲載用スクリーンショット（1 枚以上。パレットで動作中の画面）
-- [ ] プライバシーポリシー URL（本拡張は Redmine へ HTTPS 通信・API キーを扱うため必須）
+- [ ] Real app logos (44×44 / 150×150 / 310×150 / StoreLogo — can be generated from one hi-res source)
+- [ ] At least one screenshot (the extension running in the palette)
+- [ ] A privacy policy URL (required — the extension makes HTTPS calls to Redmine and handles an API key)
 
-## A-3. MSIX バンドルを生成
+Listing copy (EN/JP) and certification notes are drafted in `STORE-LISTING.md`.
 
-提出物は初版 **1.0.0**。掲載文の下書きは `STORE-LISTING.md`。生成方法は2通り。
+## A-3. Build the MSIX bundle
 
-**推奨: CI（公式 SDK・トリミング有効＝小さいパッケージ）**
-- 事前に Actions の Variables に予約値を登録: `STORE_IDENTITY_NAME` / `STORE_PUBLISHER`
-- GitHub → Actions → **Store package** → Run workflow（version=1.0.0）→ 生成された
-  `store-msixbundle-1.0.0` アーティファクトをダウンロード（`.github/workflows/store-package.yml`）
+The first release is **1.0.0**. The package is unsigned; the Store signs it on submission.
 
-**ローカル**
+**Recommended — CI (official SDK, trimmed = smaller package):**
+
+- Set Actions → Variables: `STORE_IDENTITY_NAME` and `STORE_PUBLISHER` to the reserved values.
+- GitHub → Actions → **Store package** → Run workflow (version = `1.0.0`) and download the
+  `store-msixbundle-<version>` artifact (`.github/workflows/store-package.yml`).
+
+**Local:**
+
 ```powershell
-# 予約済み Identity を注入して Store 用バンドルを作る（署名なし。Store 側で署名される）
-.\build-msix.ps1 -Version 1.0.0 -IdentityName <予約Name> -Publisher "<予約Publisher>"
+.\build-msix.ps1 -Version 1.0.0 -IdentityName <reserved-name> -Publisher "<reserved-publisher>"
 # → MsixPackages\RedmineExtension_1.0.0.0_Bundle.msixbundle
 ```
 
-- スクリプトはビルド中だけ `Package.appxmanifest` の Identity/Version を書き換え、**終了時に必ず復元**する。
-- `makeappx.exe` は PATH / Windows Kits から自動検出。
-- **トリミングについて**: 既定は有効（小さいパッケージ）。ただし scoop 版 .NET SDK など
-  ILLink のタスクホスト生成に失敗する環境では `-NoTrim` を付ける（パッケージは大きくなる）。
-  この理由から**最終提出物は CI での生成を推奨**。
+- The script rewrites the manifest Identity/Version only during the build and restores it in a
+  `finally` (never commit that change).
+- `makeappx.exe` is auto-detected from PATH / the Windows SDK.
+- Trimming is on by default (smaller package). If the trimmed build fails on a particular SDK
+  install, pass `-NoTrim` (larger package) — this is why CI is the recommended source for the
+  final submission artifact.
 
-## A-4. Partner Center へ提出
+## A-4. Submit in Partner Center
 
-1. アプリ → **新しい申請を開始**。
-2. **パッケージ** に `.msixbundle` をアップロード。
-3. **ストアの掲載情報 → 説明** に Command Palette 連携である旨を明記
-   （例: 「Windows コマンドパレットから Redmine のチケット操作を行う拡張機能。PowerToys の
-   コマンドパレット有効化が必要です。」）。
-4. **認定通知メモ** にテスト手順（PowerToys 前提・コマンド例）を記載。
-5. 価格・提供範囲を設定して **認定に提出**（通常 1〜3 営業日）。
+1. Your app → **Start a new submission**.
+2. **Packages** → upload the `.msixbundle`.
+3. **Store listings** → paste the description from `STORE-LISTING.md` (state the PowerToys /
+   Command Palette prerequisite).
+4. **Notes for certification** → include the test steps from `STORE-LISTING.md`.
+5. Set pricing / markets and **submit for certification** (typically 1–3 business days).
 
-> Store 掲載だけでは CmdPal のブラウズ検索に出ない。ユーザーは Store 直リンク、または
-> `ms-windows-store://assoc/?Tags=AppExtension-com.microsoft.commandpalette` から見つける。
-> ブラウズにも載せたい場合は経路 B（winget）を併用する。
+> A Store-only listing does not appear in the palette's built-in browse experience. Users find
+> it via a direct Store link or `ms-windows-store://assoc/?Tags=AppExtension-com.microsoft.commandpalette`.
+> To also appear in browse, additionally publish to winget (route B).
 
-## A-5. 更新
+## A-5. Updates
 
-版数を上げて A-3〜A-4 を繰り返す。Store がインストール済みユーザーへ自動更新する。
+Bump the version and repeat A-3…A-4. The Store auto-updates installed users.
 
 ---
 
-# 経路 B/C: winget / EXE（補助・記録）
+# Route B — winget (optional)
 
-## 1. バージョンを上げる
-
-- `RedmineExtension/Package.appxmanifest` の `Version="X.Y.Z.0"`（MSIX 開発用の整合のため）
-- タグが正：リリース版数はタグ `vX.Y.Z` から取られ、`-p:Version` で埋め込まれる
-
-## 2. ローカルでインストーラーを検証（旧 EXE 手順・記録として残置）
-
-> ⚠️ この EXE は正常にインストール・COM 登録されるが、**CmdPal には発見されない**（冒頭参照）。
+Requires a **signed** `.msix`/`.msixbundle` (the Store route does not — Partner Center signs).
+Build the bundle as in A-3, sign it with your code-signing certificate, attach it to a GitHub
+Release, then:
 
 ```powershell
-.\build-exe.ps1 -Version X.Y.Z
-# → Installer\RedmineExtension_X.Y.Z_x64.exe / _arm64.exe（ビルド自体は x64/arm64 とも検証済み）
+wingetcreate new "<url-to-signed.msixbundle>"
 ```
 
-## 3. リリース（タグ push で自動）
+Before submitting, edit the generated manifests:
 
-```powershell
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push origin vX.Y.Z
-```
-
-release.yml が x64/arm64 のインストーラーをビルドし GitHub Release に添付する。
-
-## 4. winget への初回提出（手動）※経路 B（署名済み MSIX）を選んだ場合のみ。URL は .msix に読み替える
-
-```powershell
-wingetcreate new `
-  "https://github.com/dbsgg/RedmineExtension/releases/download/vX.Y.Z/RedmineExtension_X.Y.Z_x64.exe" `
-  "https://github.com/dbsgg/RedmineExtension/releases/download/vX.Y.Z/RedmineExtension_X.Y.Z_arm64.exe"
-```
-
-プロンプトへの回答例：PackageIdentifier `dbsgg.RedmineExtension` / Publisher `dbsgg` /
-PackageName `Redmine for Command Palette` / License `MIT`。
-
-**提出前にマニフェストを必ず編集**（`wingetcreate` は生成のみで入れてくれない）：
-
-1. `*.locale.en-US.yaml`（全ロケール）に **CmdPal ブラウズ掲載用タグ**：
+1. In every `*.locale.*.yaml`, add the browse tag:
    ```yaml
    Tags:
    - windows-commandpalette-extension
    ```
-2. `*.installer.yaml` に **Windows App SDK ランタイム依存**（`Directory.Packages.props` の
-   `Microsoft.WindowsAppSDK` = 2.0.1 に対応する系列へ合わせる）：
+2. In `*.installer.yaml`, declare the Windows App SDK runtime dependency (match the
+   `Microsoft.WindowsAppSDK` version in `Directory.Packages.props`):
    ```yaml
    Dependencies:
      PackageDependencies:
      - PackageIdentifier: Microsoft.WindowsAppRuntime.2.0
    ```
-3. `winget validate --manifest <dir>` を通してから `--submit`（または手動 PR）。
+3. Run `winget validate --manifest <dir>` before `--submit` (or open the PR manually).
 
-## 5. 2 回目以降
+Subsequent releases can be automated via `release.yml` (tag push → build → GitHub Release →
+`wingetcreate update` PR) once `WINGET_ENABLED` and `WINGET_PAT` are set.
 
-`WINGET_ENABLED=true` を設定してあれば、タグ push だけで release.yml の
-`winget-update` ジョブが `wingetcreate update dbsgg.RedmineExtension` の PR を自動送付する。
+---
 
-## トラブルシューティング
+## Troubleshooting
 
-| 症状 | 対処 |
+| Symptom | Fix |
 |---|---|
-| CmdPal のブラウズに出ない | locale YAML の `windows-commandpalette-extension` タグ漏れ |
-| インストール後に拡張が出ない | LocalServer32 のパス/引数、CLSID の一致、CmdPal 再起動を確認 |
-| 起動時に WinRT 型ロード失敗 | WindowsAppRuntime 依存の宣言漏れ（手順 4-2） |
-| winget PR の検証落ち | `winget validate` をローカルで再実行し指摘を修正 |
+| Not shown in the palette's browse | Missing `windows-commandpalette-extension` tag in the locale YAML (winget route) |
+| Extension missing after install | Confirm it was installed as an MSIX (not the EXE), and restart Command Palette |
+| WinRT type-load failure on start | Missing WindowsAppRuntime dependency declaration |
+| winget PR validation fails | Re-run `winget validate` locally and fix the reported issues |
+| Trimmed MSIX build fails locally | Build with `-NoTrim`, or use the CI workflow (official SDK) |
