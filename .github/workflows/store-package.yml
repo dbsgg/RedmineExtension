@@ -43,6 +43,13 @@ jobs:
             PublisherDisplayName = '${{ vars.STORE_PUBLISHER_DISPLAY_NAME }}'
           }
           if ('${{ inputs.no_trim }}' -eq 'true') { $params.NoTrim = $true }
+
+          # Store 提出用に Identity を注入するなら、表示名も必須（空だと Partner Center の
+          # PublisherDisplayName 検証で落ちる。設定漏れをここで早期に検知する）。
+          if ($params.IdentityName -and -not $params.PublisherDisplayName) {
+            Write-Error "STORE_PUBLISHER_DISPLAY_NAME variable is not set. Set it (Actions Variables) to your Partner Center publisher display name."
+          }
+
           .\build-msix.ps1 @params
 
       - name: Upload bundle
