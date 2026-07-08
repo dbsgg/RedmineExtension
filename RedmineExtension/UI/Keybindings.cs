@@ -42,6 +42,14 @@ internal static class Keybindings
     public static readonly KeyChord OpenInBrowser =
         KeyChordHelpers.FromModifiers(ctrl: true, alt: false, shift: false, win: false, vkey: VirtualKey.Enter, scanCode: 0);
 
+    /// <summary>再割当・重複割当ともに不可の予約チョード: Ctrl+Enter（Enter の固定ペア）と
+    /// Ctrl+A（検索ボックスの全選択）。カスタマイズフォームの検証で使う。</summary>
+    public static readonly KeyChord[] Reserved =
+    [
+        OpenInBrowser,
+        KeyChordHelpers.FromModifiers(ctrl: true, alt: false, shift: false, win: false, vkey: VirtualKey.A, scanCode: 0),
+    ];
+
     public static KeyChord Back => Resolve("back");
     public static KeyChord Home => Resolve("home");
 

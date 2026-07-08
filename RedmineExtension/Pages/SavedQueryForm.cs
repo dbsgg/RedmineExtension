@@ -45,7 +45,8 @@ internal sealed partial class SavedQueryForm : FormContent
         query.Name = name;
         query.PinnedToTopLevel = Get("pinned") == "true";
 
-        var raw = Get("query").Trim();
+        // 貼り付けに key= が含まれていても永続化ファイル・画面表示へ残さない（ハードルール）。
+        var raw = RedmineApi.StripApiKey(Get("query"));
         query.RawQuery = string.IsNullOrEmpty(raw) ? null : raw;
 
         // 詳細ペインのローカル設定。「既定に従う」なら null、専用指定なら選択キーの一覧。

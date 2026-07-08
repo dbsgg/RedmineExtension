@@ -81,6 +81,19 @@ internal static class Strings
         public static string CopyTitleFailed(int id, string message) => T(
             $"タイトル取得に失敗: {message}（#{id} のみコピー）",
             $"Failed to fetch the title: {message} (copied #{id} only)");
+
+        // クリップボード書き込み失敗の内訳（CopyFailed の message として表示される）。
+        public static readonly string ClipboardOpenFailed = T(
+            "クリップボードを開けませんでした",
+            "Could not open the clipboard");
+
+        public static readonly string ClipboardAllocFailed = T(
+            "クリップボード用メモリの確保に失敗しました",
+            "Could not allocate memory for the clipboard");
+
+        public static readonly string ClipboardWriteFailed = T(
+            "クリップボードへの書き込みに失敗しました",
+            "Could not write to the clipboard");
     }
 
     /// <summary>説明・コメントページ。</summary>
@@ -259,6 +272,10 @@ internal static class Strings
         public static string DuplicateBinding(string text) => T(
             $"キーが重複しています: {text}",
             $"Duplicate shortcut: {text}");
+
+        public static string ReservedBinding(string text) => T(
+            $"予約済みのキーは割り当てられません: {text}（Ctrl+Enter は Enter の固定ペア、Ctrl+A は検索ボックスの全選択）",
+            $"Reserved shortcut: {text} (Ctrl+Enter is the fixed pair of Enter; Ctrl+A selects all in the search box)");
     }
 
     /// <summary>詳細ペイン（右ペイン）の項目名。TicketDetails.Fields のキーと対で使う。</summary>

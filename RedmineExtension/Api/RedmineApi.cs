@@ -244,10 +244,10 @@ internal sealed class RedmineApi
         string.IsNullOrWhiteSpace(query.RawQuery) ? BuildIssueQuery(query) : NormalizeRawQuery(query.RawQuery);
 
     // 貼り付けられた query_id / クエリ文字列 / URL を Redmine 用クエリへ正規化する。
-    // API キー(key=)は資格情報マネージャから付与するため除去する。
+    // API キー(key=)は資格情報マネージャから付与するため除去する（保存時にも除去済み。ここは防衛線）。
     private static string NormalizeRawQuery(string raw)
     {
-        raw = raw.Trim();
+        raw = StripApiKey(raw);
         if (raw.Length == 0)
         {
             return "set_filter=1";
@@ -261,13 +261,25 @@ internal sealed class RedmineApi
 
         // URL なら '?' 以降のクエリ部だけ使う。
         var questionMark = raw.IndexOf('?');
+        return questionMark >= 0 ? raw[(questionMark + 1)..] : raw;
+    }
+
+    /// <summary>
+    /// 貼り付け文字列から key= パラメータだけを除去する（URL/クエリの形はそのまま保つ）。
+    /// 保存クエリの永続化前に必ず通し、API キーが saved-queries.json に平文で残らないようにする。
+    /// </summary>
+    internal static string StripApiKey(string raw)
+    {
+        raw = raw.Trim();
+        var questionMark = raw.IndexOf('?');
+        var prefix = questionMark >= 0 ? raw[..(questionMark + 1)] : string.Empty;
         var query = questionMark >= 0 ? raw[(questionMark + 1)..] : raw;
 
         var parts = query
             .Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(p => !p.StartsWith("key=", StringComparison.OrdinalIgnoreCase));
 
-        return string.Join("&", parts);
+        return prefix + string.Join("&", parts);
     }
 
     // Redmine の長形式フィルタ(set_filter=1 + f[]/op[]/v[])を組み立てる。

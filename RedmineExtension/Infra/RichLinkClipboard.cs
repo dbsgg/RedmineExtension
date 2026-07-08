@@ -26,7 +26,7 @@ internal static partial class RichLinkClipboard
 
         if (!OpenClipboard(IntPtr.Zero))
         {
-            throw new InvalidOperationException("クリップボードを開けませんでした。");
+            throw new InvalidOperationException(Strings.Tickets.ClipboardOpenFailed);
         }
 
         try
@@ -52,14 +52,14 @@ internal static partial class RichLinkClipboard
         var hMem = GlobalAlloc(GMEM_MOVEABLE, (UIntPtr)bytes.Length);
         if (hMem == IntPtr.Zero)
         {
-            throw new InvalidOperationException("GlobalAlloc 失敗（メモリ確保不可）");
+            throw new InvalidOperationException(Strings.Tickets.ClipboardAllocFailed);
         }
 
         var ptr = GlobalLock(hMem);
         if (ptr == IntPtr.Zero)
         {
             GlobalFree(hMem);
-            throw new InvalidOperationException("GlobalLock 失敗");
+            throw new InvalidOperationException(Strings.Tickets.ClipboardAllocFailed);
         }
 
         try
@@ -75,7 +75,7 @@ internal static partial class RichLinkClipboard
         if (SetClipboardData(format, hMem) == IntPtr.Zero)
         {
             GlobalFree(hMem);
-            throw new InvalidOperationException("SetClipboardData 失敗");
+            throw new InvalidOperationException(Strings.Tickets.ClipboardWriteFailed);
         }
     }
 

@@ -33,8 +33,9 @@ internal sealed partial class CustomizeForm : FormContent
 
         string Get(string key) => root.TryGetProperty(key, out var v) ? (v.GetString() ?? string.Empty) : string.Empty;
 
-        // --- キーバインド: 全行を検証（不正・重複があれば保存せずトーストで指摘） ---
+        // --- キーバインド: 全行を検証（不正・重複・予約キーがあれば保存せずトーストで指摘） ---
         var bindings = new Dictionary<string, string>();
+        var reserved = new HashSet<string>(Keybindings.Reserved.Select(Signature));
         var used = new HashSet<string>();
         foreach (var action in Keybindings.Actions)
         {
@@ -49,8 +50,16 @@ internal sealed partial class CustomizeForm : FormContent
                 return CommandResult.ShowToast(Strings.Customize.InvalidBinding(action.Label(), text));
             }
 
-            // 表記ゆれ（Ctrl+shift+k 等）を吸収するため解析結果で重複判定する。
-            if (!used.Add($"{chord.Modifiers}:{chord.Vkey}"))
+            // 表記ゆれ（Ctrl+shift+k 等）を吸収するため解析結果で判定する。
+            var signature = Signature(chord);
+
+            // 予約チョード（Ctrl+Enter 固定ペア・Ctrl+A 検索ボックス）への割当は弾く。
+            if (reserved.Contains(signature))
+            {
+                return CommandResult.ShowToast(Strings.Customize.ReservedBinding(text));
+            }
+
+            if (!used.Add(signature))
             {
                 return CommandResult.ShowToast(Strings.Customize.DuplicateBinding(text));
             }
@@ -131,6 +140,9 @@ internal sealed partial class CustomizeForm : FormContent
         sb.Append(CultureInfo.InvariantCulture, $"],\"actions\":[{{\"type\":\"Action.Submit\",\"title\":{J(Strings.Customize.Submit)}}}]}}");
         return sb.ToString();
     }
+
+    // 表記ゆれを吸収した比較用のチョード識別子（重複・予約キー判定で共用）。
+    private static string Signature(KeyChord chord) => $"{chord.Modifiers}:{chord.Vkey}";
 
     // JSON 文字列としてエスケープして引用符で囲む(非 ASCII も \u 形式に。AOT 安全)。
     private static string J(string value) => "\"" + JsonEncodedText.Encode(value).ToString() + "\"";

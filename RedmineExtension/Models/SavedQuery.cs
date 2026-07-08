@@ -92,6 +92,30 @@ internal sealed class SavedQueryStore
     {
         _filePath = TryGetFilePath();
         _entries = Load();
+        SanitizeLoaded();
+    }
+
+    // 旧バージョンが key= 入りのまま保存した RawQuery を除去し、変化があれば保存し直す。
+    private void SanitizeLoaded()
+    {
+        var changed = false;
+        foreach (var entry in _entries)
+        {
+            if (entry.RawQuery is { } raw)
+            {
+                var stripped = RedmineApi.StripApiKey(raw);
+                if (stripped != raw)
+                {
+                    entry.RawQuery = stripped.Length == 0 ? null : stripped;
+                    changed = true;
+                }
+            }
+        }
+
+        if (changed)
+        {
+            Save();
+        }
     }
 
     public event EventHandler? Changed;
