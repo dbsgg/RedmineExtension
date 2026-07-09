@@ -193,11 +193,11 @@ state degrades to in-memory only.
 - **CmdPal only discovers MSIX-packaged extensions** — enumeration is
   `AppExtensionCatalog.Open("com.microsoft.commandpalette")` in the host's
   `WinRTExtensionService`; there is **no registry-based discovery of unpackaged extensions**
-  (verified 2026-07 against the PowerToys sources and the installed 0.11 binary). The
-  unpackaged-EXE recipe in `.github/skills/publish-extension/references/winget-publishing.md`
-  comes from the official extension template but **does not match the product — do not trust
-  it for distribution decisions**. Public distribution therefore requires a signed MSIX
-  (Microsoft Store, or winget-pkgs with `InstallerType: msix`); see `RELEASING.md`.
+  (verified 2026-07 against the PowerToys sources and the installed 0.11 binary). The official
+  extension template's unpackaged-EXE winget recipe did not match the product and was removed
+  from `.github/skills/publish-extension/` (2026-07) — **do not reintroduce it**. Public
+  distribution therefore requires a signed MSIX (Microsoft Store, or winget-pkgs with
+  `InstallerType: msix`); see `RELEASING.md`.
 - **Store packaging: `build-msix.ps1`** builds x64+ARM64 MSIX and bundles them into an
   unsigned `.msixbundle` (Partner Center signs). It temporarily rewrites the manifest
   Identity/Version during the build and restores it in a `finally` (never commit that change);

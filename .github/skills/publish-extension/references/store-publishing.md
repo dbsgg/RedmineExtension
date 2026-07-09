@@ -153,8 +153,8 @@ Before submitting, verify:
 >   ```
 > - Searching the Store app directly
 >
-> For discoverability within Command Palette's browse experience, also publish to WinGet.
-> See [winget-publishing.md](winget-publishing.md) for details.
+> For discoverability within Command Palette's browse experience, also publish to WinGet
+> with a signed MSIX (`InstallerType: msix`) — see `RELEASING.md` (route B) at the repo root.
 
 ## Updating Your Extension
 
