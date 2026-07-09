@@ -7,11 +7,13 @@ extension for working with [Redmine](https://www.redmine.org/) without leaving t
 
 > "Redmine" is a trademark of its respective owner. This is an independent, unofficial extension.
 
+![Main page — issue number search with recent history](screenshots/main-page-en.png)
+
 ## Features
 
 - **Find an issue by number** — type a ticket number (a leading `#` is allowed). Enter shows the issue's description and comments; details appear in the right pane.
 - **Description & comments view** — comments are numbered (`n/total`) and listed in one consistent time order: newest first by default (description last), or press Ctrl+O for oldest first (description on top, like the Redmine web UI).
-- **Recent history** — recently viewed/opened/copied tickets are listed when the search box is empty. The count is configurable.
+- **Recent history** — recently viewed/opened/copied tickets are listed when the search box is empty. The count is configurable. Typing text filters the whole history by ticket number and title (space-separated words are ANDed).
 - **Saved queries** — paste a Redmine `query_id`, a raw filter query, or a URL to save it. The *Saved queries* hub lists each query with its cached issue count; individual queries can be pinned as top-level commands.
 - **Large result sets** — query results load 100 issues at a time; scrolling to the end of the list fetches the next page automatically, or press Ctrl+L on any item to load the next page explicitly.
 - **Quick edits** — change an issue's status (Ctrl+S) or add a comment (Ctrl+M) without leaving the palette. Anything more detailed is one Ctrl+Enter away in the browser.
@@ -32,6 +34,13 @@ extension for working with [Redmine](https://www.redmine.org/) without leaving t
 | Ctrl+N / Ctrl+E / Ctrl+Delete | Add / edit / delete a saved query |
 | Alt+← | Go back one page |
 | Alt+Home | Jump all the way back to the palette home |
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Saved queries hub with cached issue counts](screenshots/saved-queries-hub-en.png)<br>*Saved queries with cached issue counts* | ![Saved query results with the detail pane (Japanese UI)](screenshots/saved-query-results-ja.png)<br>*Query results with the right-hand detail pane (Japanese UI)* |
+| ![Description & comments page (Japanese UI)](screenshots/comments-page-ja.png)<br>*Numbered comments with a preview pane (Japanese UI)* | ![Main page in Japanese](screenshots/main-page-ja.png)<br>*The UI follows your Windows display language* |
 
 ## Configuration
 
