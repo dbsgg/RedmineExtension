@@ -90,11 +90,11 @@ internal sealed partial class CustomizeForm : FormContent
         sb.Append("{\"type\":\"AdaptiveCard\",\"$schema\":\"http://adaptivecards.io/schemas/adaptive-card.json\",\"version\":\"1.5\",\"body\":[");
 
         // --- セクション1: 詳細ペインの既定項目（見出し + 開閉ボタン + 複数選択） ---
-        // カスタマイズ済みなら初期状態で開いておく。畳んだまま保存しても選択は維持される。
-        var fieldsCustomized = _config.DetailFields is not null;
+        // 既定では畳んでおく（開閉ボタンで表示）。非表示中の入力値も送信されるため、
+        // 畳んだまま保存しても選択は維持される。
         sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"TextBlock\",\"wrap\":true,\"weight\":\"Bolder\",\"text\":{J(Strings.Customize.DetailFieldsLabel)}}},");
         sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"ActionSet\",\"actions\":[{{\"type\":\"Action.ToggleVisibility\",\"title\":{J(Strings.Customize.ShowDetailFields)},\"targetElements\":[\"detailFieldsBox\"]}}]}},");
-        sb.Append(CultureInfo.InvariantCulture, $"{{\"type\":\"Container\",\"id\":\"detailFieldsBox\",\"isVisible\":{(fieldsCustomized ? "true" : "false")},\"items\":[");
+        sb.Append("{\"type\":\"Container\",\"id\":\"detailFieldsBox\",\"isVisible\":false,\"items\":[");
         sb.Append("{\"type\":\"Input.ChoiceSet\",\"id\":\"detailFields\",\"isMultiSelect\":true,\"choices\":[");
         var first = true;
         foreach (var (key, label) in TicketDetails.Fields)
