@@ -217,19 +217,20 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
     private IListItem[] DefaultItems(string raw)
     {
         var items = new List<IListItem>();
+        var search = (raw ?? string.Empty).Trim();
 
-        // 検索ボックスが空のときだけ直近の履歴を設定件数まで表示する。
-        if (string.IsNullOrWhiteSpace(raw))
+        // 空のときは直近の履歴を設定件数まで表示。検索中は保持している履歴全体を候補にし、
+        // 末尾の文章一致フィルタ（タイトル+副題）で絞り込む。
+        var entries = (search.Length == 0
+            ? _history.Recent.Take(_settings.HistoryCount)
+            : _history.Recent).ToList();
+        foreach (var entry in entries)
         {
-            var entries = _history.Recent.Take(_settings.HistoryCount).ToList();
-            foreach (var entry in entries)
-            {
-                items.Add(HistoryItem(entry));
-            }
-
-            // 履歴チケットの詳細を 1 リクエストでまとめて取得（負荷を抑える）。
-            EnsureHistoryDetails(entries.Select(e => e.Id).ToList());
+            items.Add(HistoryItem(entry));
         }
+
+        // 履歴チケットの詳細を 1 リクエストでまとめて取得（負荷を抑える）。
+        EnsureHistoryDetails(entries.Select(e => e.Id).ToList());
 
         // 保存クエリのハブへ遷移（Enter=遷移の体系に合わせた入口）。
         items.Add(new ListItem(_hub)
@@ -247,7 +248,28 @@ internal sealed partial class RedmineExtensionPage : DynamicListPage
             Icon = new IconInfo(""), // glyph:E771
         });
 
-        return items.ToArray();
+        if (search.Length == 0)
+        {
+            return items.ToArray();
+        }
+
+        // 検索中は表示文言（タイトル+副題）による一致で絞り込む。履歴の文章に加え、
+        // 保存クエリ/カスタマイズの入口も一致したときだけ残す。
+        return items.Where(i => MatchesSearch(i.Title + " " + i.Subtitle, search)).ToArray();
+    }
+
+    // 空白区切りの各語がすべて含まれれば一致（大文字小文字は区別しない）。
+    private static bool MatchesSearch(string text, string search)
+    {
+        foreach (var token in search.Split((char[]?)null, System.StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!text.Contains(token, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private ListItem HistoryItem(TicketHistoryEntry entry)

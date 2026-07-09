@@ -61,8 +61,8 @@ internal static class Strings
         public static readonly string MainCommandTitle = T("チケットを開く", "Open a ticket");
 
         public static readonly string SearchPlaceholder = T(
-            "チケット番号を入力（番号の後にスペースでタイトル表示）",
-            "Type an issue number (add a space to fetch the title)");
+            "チケット番号か履歴を探す文字を入力（番号の後にスペースでタイトル表示）",
+            "Type an issue number or text to filter the history (a space after the number fetches the title)");
 
         public static readonly string OpenTicketHint = T(
             "Enter でチケットをブラウザで開く",
