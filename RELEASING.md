@@ -49,12 +49,13 @@ Repo settings for the winget automation (optional, route B):
 
 ## A-2. Store assets (must be prepared)
 
-The `RedmineExtension/Assets/` folder currently holds template placeholder logos. A Store
-listing needs:
+A Store listing needs:
 
-- [ ] Real app logos (44×44 / 150×150 / 310×150 / StoreLogo — can be generated from one hi-res source)
-- [ ] At least one screenshot (the extension running in the palette)
-- [ ] A privacy policy URL (required — the extension makes HTTPS calls to Redmine and handles an API key)
+- [x] Real app logos — `RedmineExtension/Assets/` holds a unique icon set (deep-red gradient
+      with a white `#` glyph; certification rejects template placeholder images)
+- [x] At least one screenshot — `screenshots/` (1920x1080, JA/EN)
+- [x] A privacy policy URL (required — the extension makes HTTPS calls to Redmine and handles
+      an API key): `PRIVACY.md` on GitHub
 
 Listing copy (EN/JP) and certification notes are drafted in `STORE-LISTING.md`.
 
