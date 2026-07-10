@@ -86,14 +86,42 @@ Redmine, コマンドパレット, PowerToys, 課題管理, チケット, プロ
 
 ## 認定通知メモ（Notes for certification）— en
 
-This extension integrates with Microsoft PowerToys Command Palette. To test:
-1. Install Microsoft PowerToys (Microsoft Store or https://github.com/microsoft/PowerToys) and enable the Command Palette feature.
-2. Install this extension.
-3. Open Command Palette (Win+Alt+Space by default) and type "Redmine".
-4. Open the extension's Settings and enter a Redmine URL and API key. A public demo server such as https://www.redmine.org can be used to reach the number-search UI, though editing requires an account/API key.
-5. Type an issue number to open its description and comments; try the "Saved queries" command.
+Partner Center の「認定の注意書き」欄にそのまま貼る（顧客には非公開。共有すべき資格情報は
+無いので、無料の自己登録手順で代替している）。
 
-Note: full functionality requires a reachable Redmine server with the REST API enabled and a valid API key. The extension has no UI outside Command Palette (it does not appear in the app list by design).
+IMPORTANT: This app is an extension for Microsoft PowerToys Command Palette. It has no
+standalone window and intentionally does not appear in the Start menu / app list
+(AppListEntry="none" in the manifest). All of its UI is hosted inside Command Palette,
+which activates it on demand as an out-of-process COM server — this is the standard
+Command Palette extension model.
+
+Prerequisites
+1. Install Microsoft PowerToys (Microsoft Store or https://github.com/microsoft/PowerToys)
+   and make sure the "Command Palette" module is enabled in PowerToys Settings.
+
+Test steps
+2. Install this extension. Open Command Palette (default hotkey: Win+Alt+Space). If the
+   palette was already running during installation, run its "Reload" command once.
+3. Type "Redmine" — the extension's commands appear (e.g. "Open a ticket").
+4. The extension requires a Redmine server URL and a personal API key. Until both are set it
+   shows a "setup required" item that opens its settings page — this is the expected
+   first-run state.
+5. To test against a real server for free: register an account at https://www.redmine.org
+   (the public Redmine instance run by the Redmine open-source project), then copy the
+   "API access key" from https://www.redmine.org/my/account. In the extension settings,
+   enter https://www.redmine.org as the URL and paste that key.
+6. Type an issue number (e.g. 1) and press Enter to read its description and comments;
+   Ctrl+Enter opens it in the browser. Also try the "Saved queries" command and add a query
+   such as: status_id=open
+7. Read/browse features are sufficient to validate the app. Changing an issue's status or
+   adding a comment additionally requires an account with write permission on a Redmine
+   project, which the public instance does not grant to new accounts.
+
+Notes
+- The UI language follows the Windows display language: Japanese on Japanese Windows,
+  English otherwise.
+- The API key entered by the tester is stored only in Windows Credential Manager
+  (DPAPI-encrypted); network traffic goes only to the Redmine server URL the tester enters.
 
 ---
 
@@ -149,7 +177,8 @@ Redmine サーバー URL に対してのみ行います（internetClient）。
 
 - [ ] バージョンを 1.0.0.0 で提出（`Package.appxmanifest` と `build-msix.ps1 -Version 1.0.0` を一致）
 - [ ] Partner Center 予約の Identity Name / Publisher を `build-msix.ps1` の引数（または CI 変数）で注入
-- [ ] Store アートワーク（ロゴ各サイズ）を差し替え。スクリーンショットは `screenshots/`
+- [x] Store アートワーク（ロゴ各サイズ）を差し替え済み（深紅グラデーション + 白 `#`。
+      テンプレートの既定画像のままだと認定で落ちる）。スクリーンショットは `screenshots/`
       （1920x1080、日英、タスクバーなし）を使用
 - [ ] **プライバシーポリシー URL** を用意して設定（ネットワーク通信・API キーを扱うため必須）。
       例: GitHub Pages か README のアンカーに簡潔なポリシーを置く（「入力された Redmine URL と API キーは
