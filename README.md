@@ -37,10 +37,8 @@ extension for working with [Redmine](https://www.redmine.org/) without leaving t
 
 ## Screenshots
 
-| | |
-|---|---|
-| ![Saved queries hub with cached issue counts](screenshots/saved-queries-hub-en.png)<br>*Saved queries with cached issue counts* | ![Saved query results with the detail pane (Japanese UI)](screenshots/saved-query-results-ja.png)<br>*Query results with the right-hand detail pane (Japanese UI)* |
-| ![Description & comments page (Japanese UI)](screenshots/comments-page-ja.png)<br>*Numbered comments with a preview pane (Japanese UI)* | ![Main page in Japanese](screenshots/main-page-ja.png)<br>*The UI follows your Windows display language* |
+![Saved queries hub with cached issue counts](screenshots/saved-queries-hub-en.png)
+*Saved queries with cached issue counts. More screenshots (Japanese UI) in the [Japanese README](README.ja.md).*
 
 ## Configuration
 
@@ -53,7 +51,7 @@ Open the extension's **Settings** and set:
 
 ### Customization (Appearance & shortcuts)
 
-The main page has an **Appearance & shortcuts** form (表示と操作のカスタマイズ) for everything
+The main page has an **Appearance & shortcuts** form for everything
 beyond the connection basics:
 
 - **Detail pane fields (default)** — multi-select of tracker / status / priority / assignee /
