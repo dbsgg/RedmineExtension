@@ -175,7 +175,8 @@ Redmine サーバー URL に対してのみ行います（internetClient）。
 
 ## 提出前チェック（Store 固有）
 
-- [ ] バージョンを 1.0.0.0 で提出（`Package.appxmanifest` と `build-msix.ps1 -Version 1.0.0` を一致）
+- [ ] バージョンを 1.0.1.0 で提出（`Package.appxmanifest` と `build-msix.ps1 -Version 1.0.1` を一致。
+      アイコン差し替え前の却下パッケージ 1.0.0.0 と審査上区別できるよう繰り上げた）
 - [ ] Partner Center 予約の Identity Name / Publisher を `build-msix.ps1` の引数（または CI 変数）で注入
 - [x] Store アートワーク（ロゴ各サイズ）を差し替え済み（深紅グラデーション + 白 `#`。
       テンプレートの既定画像のままだと認定で落ちる）。スクリーンショットは `screenshots/`
