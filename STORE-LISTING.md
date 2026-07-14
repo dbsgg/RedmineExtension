@@ -86,14 +86,26 @@ Redmine, コマンドパレット, PowerToys, 課題管理, チケット, プロ
 
 ## 認定通知メモ（Notes for certification）— en
 
-Partner Center の「認定の注意書き」欄にそのまま貼る（顧客には非公開。共有すべき資格情報は
-無いので、無料の自己登録手順で代替している）。
+Partner Center の「認定の注意書き」欄にそのまま貼る（顧客には非公開）。
+
+> **10.3.1 対応（テストアカウント必須）:** 審査担当者はアカウントの自己登録をしない。
+> 提出前に redmine.org でテスト用アカウントを作成し、下記の `<...>` プレースホルダーを
+> 実際の値に置き換えてから貼り付けること。**実際のキーをこのリポジトリにコミットしない。**
+> 審査完了までキーの再生成・パスワード変更をしないこと。
 
 IMPORTANT: This app is an extension for Microsoft PowerToys Command Palette. It has no
 standalone window and intentionally does not appear in the Start menu / app list
 (AppListEntry="none" in the manifest). All of its UI is hosted inside Command Palette,
 which activates it on demand as an out-of-process COM server — this is the standard
 Command Palette extension model.
+
+TEST ACCOUNT — please use these credentials (no in-app sign-in; the app is configured
+with a server URL + API key in its settings page, step 4 below):
+- Redmine server URL: https://www.redmine.org
+- API access key: <API-KEY>
+This is a dedicated test account we registered on the public Redmine instance (the
+open-source Redmine project's own tracker). Web sign-in for the same account, should you
+need to verify it: login <LOGIN> / password <PASSWORD> at https://www.redmine.org/login
 
 Prerequisites
 1. Install Microsoft PowerToys (Microsoft Store or https://github.com/microsoft/PowerToys)
@@ -103,19 +115,16 @@ Test steps
 2. Install this extension. Open Command Palette (default hotkey: Win+Alt+Space). If the
    palette was already running during installation, run its "Reload" command once.
 3. Type "Redmine" — the extension's commands appear (e.g. "Open a ticket").
-4. The extension requires a Redmine server URL and a personal API key. Until both are set it
-   shows a "setup required" item that opens its settings page — this is the expected
-   first-run state.
-5. To test against a real server for free: register an account at https://www.redmine.org
-   (the public Redmine instance run by the Redmine open-source project), then copy the
-   "API access key" from https://www.redmine.org/my/account. In the extension settings,
-   enter https://www.redmine.org as the URL and paste that key.
-6. Type an issue number (e.g. 1) and press Enter to read its description and comments;
+4. The first-run item "setup required" opens the extension's settings page. Enter the
+   Redmine server URL and the API access key from the TEST ACCOUNT block above, then save
+   and go back.
+5. Type an issue number (e.g. 1) and press Enter to read its description and comments;
    Ctrl+Enter opens it in the browser. Also try the "Saved queries" command and add a query
    such as: status_id=open
-7. Read/browse features are sufficient to validate the app. Changing an issue's status or
-   adding a comment additionally requires an account with write permission on a Redmine
-   project, which the public instance does not grant to new accounts.
+6. Read/browse features exercise the extension's full UI and are sufficient to validate it.
+   Changing an issue's status or adding a comment additionally requires write permission on
+   a Redmine project; the public instance is the Redmine project's real tracker, so the test
+   account intentionally has read-only access there.
 
 Notes
 - The UI language follows the Windows display language: Japanese on Japanese Windows,
