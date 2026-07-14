@@ -45,7 +45,7 @@ extension for working with [Redmine](https://www.redmine.org/) without leaving t
 Open the extension's **Settings** and set:
 
 - **Redmine URL** — the base URL of your Redmine, e.g. `http://redmine/`
-- **API access key** — your personal Redmine REST API key. It is stored in the **Windows Credential Manager** (Generic Credentials, DPAPI-encrypted per user), not in plain text.
+- **API access key** *(optional)* — your personal Redmine REST API key. Leave it empty to browse public servers anonymously (read-only); a key is required for private projects and for status changes / comments. It is stored in the **Windows Credential Manager** (Generic Credentials, DPAPI-encrypted per user), not in plain text.
 - **History count** — number of recent tickets to show (0–50, dropdown).
 - **Saved-query count refresh interval** — how stale a cached issue count may get before it is refreshed in the background (5 min–3 h, dropdown).
 

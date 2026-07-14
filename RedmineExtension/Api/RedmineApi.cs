@@ -51,9 +51,9 @@ internal sealed class RedmineApi
 
     public RedmineApi(SettingsManager settings) => _settings = settings;
 
+    // API キーは任意: 未設定なら匿名アクセス（公開プロジェクトの読み取り専用）で動作する。
     public bool IsConfigured =>
-        !string.IsNullOrWhiteSpace(_settings.ServerUrl) &&
-        !string.IsNullOrWhiteSpace(_settings.ApiKey);
+        !string.IsNullOrWhiteSpace(_settings.ServerUrl);
 
     public string IssueUrl(int id) => $"{_settings.ServerUrl}/issues/{id}";
 
@@ -227,7 +227,7 @@ internal sealed class RedmineApi
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Put, $"{_settings.ServerUrl}/issues/{id}.json");
-        request.Headers.Add("X-Redmine-API-Key", _settings.ApiKey);
+        AddApiKey(request);
         request.Content = new ByteArrayContent(buffer.ToArray());
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
@@ -324,11 +324,21 @@ internal sealed class RedmineApi
         }
     }
 
+    // キーがあるときだけ認証ヘッダーを付ける（空なら匿名アクセス。書き込みはサーバー側で 401/403 になる）。
+    private void AddApiKey(HttpRequestMessage request)
+    {
+        var key = _settings.ApiKey;
+        if (!string.IsNullOrWhiteSpace(key))
+        {
+            request.Headers.Add("X-Redmine-API-Key", key);
+        }
+    }
+
     // 反射なしの JsonDocument を返す共通 GET(AOT/トリミング安全)。呼び出し側で using で破棄する。
     private async Task<JsonDocument> GetAsync(string url)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("X-Redmine-API-Key", _settings.ApiKey);
+        AddApiKey(request);
 
         using var response = await Http.SendAsync(request).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();

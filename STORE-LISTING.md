@@ -23,7 +23,9 @@ The extension is designed to be gentle on your server (batched requests and cach
 
 Requirements
 - Microsoft PowerToys with the Command Palette feature enabled.
-- A Redmine server with the REST API enabled and a personal API access key.
+- A Redmine server with the REST API enabled. An API access key is optional: public servers
+  can be browsed read-only without one; a key is needed for private projects and for status
+  changes / comments.
 
 "Redmine" is a trademark of its respective owner. This is an independent, unofficial extension.
 
@@ -64,7 +66,8 @@ Redmine for Command Palette は、Redmine のチケットを PowerToys コマン
 
 必要環境
 - Command Palette 機能を有効にした Microsoft PowerToys。
-- REST API を有効化した Redmine サーバーと個人の API アクセスキー。
+- REST API を有効化した Redmine サーバー。API アクセスキーは任意（公開サーバーの閲覧は
+  キーなしで可能。非公開プロジェクトやステータス変更・コメント追加には必要）。
 
 「Redmine」は各権利者の商標です。本拡張は独立した非公式のものです。
 
@@ -88,10 +91,10 @@ Redmine, コマンドパレット, PowerToys, 課題管理, チケット, プロ
 
 Partner Center の「認定の注意書き」欄にそのまま貼る（顧客には非公開）。
 
-> **10.3.1 対応（テストアカウント必須）:** 審査担当者はアカウントの自己登録をしない。
-> 提出前に redmine.org でテスト用アカウントを作成し、下記の `<...>` プレースホルダーを
-> 実際の値に置き換えてから貼り付けること。**実際のキーをこのリポジトリにコミットしない。**
-> 審査完了までキーの再生成・パスワード変更をしないこと。
+> **10.3.1 対応（v1.0.2〜）:** 拡張を「API キー省略時は匿名の読み取り専用」対応にしたため、
+> **テストアカウント自体が不要**になった。審査は公開サーバー URL を入れるだけで可能。
+> 資格情報の記載・プレースホルダー置換は不要（www.redmine.org は API キー認証が無効で
+> キーを取得できないため、アカウント提供方式は成立しない。demo.redmine.org は停止中）。
 
 IMPORTANT: This app is an extension for Microsoft PowerToys Command Palette. It has no
 standalone window and intentionally does not appear in the Start menu / app list
@@ -99,13 +102,11 @@ standalone window and intentionally does not appear in the Start menu / app list
 which activates it on demand as an out-of-process COM server — this is the standard
 Command Palette extension model.
 
-TEST ACCOUNT — please use these credentials (no in-app sign-in; the app is configured
-with a server URL + API key in its settings page, step 4 below):
-- Redmine server URL: https://www.redmine.org
-- API access key: <API-KEY>
-This is a dedicated test account we registered on the public Redmine instance (the
-open-source Redmine project's own tracker). Web sign-in for the same account, should you
-need to verify it: login <LOGIN> / password <PASSWORD> at https://www.redmine.org/login
+NO TEST ACCOUNT IS NEEDED. There is no sign-in in this product. The extension browses
+public Redmine servers anonymously (read-only) when no API key is set; an API key is only
+needed for private projects and for write operations (changing an issue's status, adding
+comments). The steps below use the Redmine open-source project's public tracker and
+require no credentials at all.
 
 Prerequisites
 1. Install Microsoft PowerToys (Microsoft Store or https://github.com/microsoft/PowerToys)
@@ -115,21 +116,21 @@ Test steps
 2. Install this extension. Open Command Palette (default hotkey: Win+Alt+Space). If the
    palette was already running during installation, run its "Reload" command once.
 3. Type "Redmine" — the extension's commands appear (e.g. "Open a ticket").
-4. The first-run item "setup required" opens the extension's settings page. Enter the
-   Redmine server URL and the API access key from the TEST ACCOUNT block above, then save
-   and go back.
+4. The first-run item "setup required" opens the extension's settings page. Enter
+   https://www.redmine.org as the Redmine URL, leave "API access key" empty, save, and
+   go back.
 5. Type an issue number (e.g. 1) and press Enter to read its description and comments;
    Ctrl+Enter opens it in the browser. Also try the "Saved queries" command and add a query
    such as: status_id=open
 6. Read/browse features exercise the extension's full UI and are sufficient to validate it.
-   Changing an issue's status or adding a comment additionally requires write permission on
-   a Redmine project; the public instance is the Redmine project's real tracker, so the test
-   account intentionally has read-only access there.
+   Changing an issue's status or adding a comment requires an API key with write permission
+   on a Redmine project; without one the server rejects the write and the extension shows an
+   error message — this is expected on the public tracker.
 
 Notes
 - The UI language follows the Windows display language: Japanese on Japanese Windows,
   English otherwise.
-- The API key entered by the tester is stored only in Windows Credential Manager
+- If a tester enters an API key, it is stored only in Windows Credential Manager
   (DPAPI-encrypted); network traffic goes only to the Redmine server URL the tester enters.
 
 ---
@@ -184,8 +185,9 @@ Redmine サーバー URL に対してのみ行います（internetClient）。
 
 ## 提出前チェック（Store 固有）
 
-- [ ] バージョンを 1.0.1.0 で提出（`Package.appxmanifest` と `build-msix.ps1 -Version 1.0.1` を一致。
-      アイコン差し替え前の却下パッケージ 1.0.0.0 と審査上区別できるよう繰り上げた）
+- [ ] バージョンを 1.0.2.0 で提出（`Package.appxmanifest` と `build-msix.ps1 -Version 1.0.2` を一致。
+      1.0.0=既定アイコンで却下 / 1.0.1=テストアカウント無しで却下(10.3.1)。1.0.2 で
+      API キー省略可＝アカウント不要にして対応）
 - [ ] Partner Center 予約の Identity Name / Publisher を `build-msix.ps1` の引数（または CI 変数）で注入
 - [x] Store アートワーク（ロゴ各サイズ）を差し替え済み（深紅グラデーション + 白 `#`。
       テンプレートの既定画像のままだと認定で落ちる）。スクリーンショットは `screenshots/`

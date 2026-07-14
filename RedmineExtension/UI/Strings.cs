@@ -45,12 +45,12 @@ internal static class Strings
         public static readonly string RequiredTitle = T("Redmine の設定が必要です", "Redmine setup required");
 
         public static readonly string RequiredSubtitle = T(
-            "Enter で設定を開き、URL と API キーを入力してください",
-            "Press Enter to open the settings and enter the URL and API key");
+            "Enter で設定を開き、Redmine URL を入力してください（API キーは公開サーバーの閲覧なら省略可）",
+            "Press Enter to open the settings and enter the Redmine URL (the API key is optional for browsing public servers)");
 
         public static readonly string ConfigureFirst = T(
-            "設定で Redmine URL と API キーを入力してください。",
-            "Set the Redmine URL and API key in the settings.");
+            "設定で Redmine URL を入力してください（API キーは公開サーバーの閲覧なら省略可）。",
+            "Set the Redmine URL in the settings (the API key is optional for browsing public servers).");
     }
 
     /// <summary>番号検索・履歴（メインページ）とチケット項目。</summary>
@@ -306,8 +306,10 @@ internal static class Strings
         public static readonly string ApiKeyLabel = "API access key";
 
         public static readonly string ApiKeyDescription = T(
-            "Redmine の API アクセスキー。Windows 資格情報マネージャに保存され、入力後この欄は空に戻ります。",
-            "Your Redmine API access key. Stored in the Windows Credential Manager; this field is cleared after saving.");
+            "Redmine の API アクセスキー。Windows 資格情報マネージャに保存され、入力後この欄は空に戻ります。" +
+            "公開サーバーを読み取り専用で使うなら省略可（非公開プロジェクトの閲覧や、ステータス変更・コメント追加には必要）。",
+            "Your Redmine API access key. Stored in the Windows Credential Manager; this field is cleared after saving. " +
+            "Optional for read-only use of public servers (required for private projects and for status changes / comments).");
 
         public static readonly string ApiKeyPlaceholder = T(
             "新しいキーを入力すると更新します",
