@@ -72,16 +72,13 @@ The UI follows your Windows display language: Japanese when it is Japanese, Engl
 
 ## Install
 
-> **Status:** Microsoft Store publication is planned. Until then the extension is
-> **developer-sideload only** — Command Palette discovers extensions solely through their
-> MSIX registration, so the EXE installers produced by `build-exe.ps1` install fine but are
-> *not* picked up by CmdPal (see `RELEASING.md`).
+Requires [Microsoft PowerToys](https://learn.microsoft.com/windows/powertoys/install) with the **Command Palette** module enabled. Then install through any of:
 
-Until the Store listing is live:
+- **Extension Gallery (easiest):** open the Command Palette settings → **Extensions**, browse the Extension Gallery, and install **Redmine**.
+- **Microsoft Store:** [Redmine for Command Palette](https://apps.microsoft.com/detail/9N5ZH1H98NV2)
+- **winget:** `winget install --id 9N5ZH1H98NV2 --source msstore`
 
-1. Enable Windows **Developer Mode**.
-2. Clone the repo, open in Visual Studio, and use **Build → Deploy** (installs the MSIX).
-3. Run **Reload** inside Command Palette.
+If Command Palette was already running, run its **Reload** command once after installing. Updates arrive automatically through the Store.
 
 ## Build & run (development)
 

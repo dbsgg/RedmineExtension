@@ -196,4 +196,5 @@ Redmine サーバー URL に対してのみ行います（internetClient）。
       例: GitHub Pages か README のアンカーに簡潔なポリシーを置く（「入力された Redmine URL と API キーは
       ユーザー端末の資格情報マネージャーにのみ保存し、指定 Redmine サーバー以外へ送信しない」旨）
 - [ ] 年齢区分アンケート・提供国/地域・価格（無料想定）を設定
-- [ ] `winget search -s msstore` や直リンクでの導線を README に追記（掲載後）
+- [x] `winget search -s msstore` や直リンクでの導線を README に追記（掲載済み。Store ID:
+      `9N5ZH1H98NV2`、Extension Gallery にも掲載 = microsoft/CmdPal-Extensions#118）
