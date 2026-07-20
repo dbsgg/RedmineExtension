@@ -162,7 +162,6 @@ internal static class Strings
         public static readonly string FormCreateName = T("作成", "Create");
         public static readonly string FormEditName = T("編集", "Edit");
         public static readonly string FormNameLabel = T("名前", "Name");
-        public static readonly string FormNameRequired = T("名前は必須です", "A name is required");
         public static readonly string FormQueryLabel = T("クエリ", "Query");
         public static readonly string FormDefaultName = T("保存クエリ", "Saved query");
         public static readonly string FormPinToggle = T("トップレベルに固定表示する", "Pin to the top level");
@@ -172,6 +171,10 @@ internal static class Strings
             "Use query-specific detail pane fields");
 
         public static readonly string FormDetailsLabel = T("詳細ペインに表示する項目", "Detail pane fields");
+
+        public static readonly string FormDetailsRevert = T(
+            "詳細ペインの表示項目を既定に戻す",
+            "Revert to the default detail pane fields");
 
         public static readonly string FormHint = T(
             "Redmine でフィルタを保存し、URL の query_id を貼るのが簡単です。空欄なら未完了チケットを表示します。API キーは資格情報マネージャから付与されるため、クエリに key= は不要です。",
