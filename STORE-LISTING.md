@@ -185,9 +185,9 @@ Redmine サーバー URL に対してのみ行います（internetClient）。
 
 ## 提出前チェック（Store 固有）
 
-- [ ] バージョンを 1.0.2.0 で提出（`Package.appxmanifest` と `build-msix.ps1 -Version 1.0.2` を一致。
-      1.0.0=既定アイコンで却下 / 1.0.1=テストアカウント無しで却下(10.3.1)。1.0.2 で
-      API キー省略可＝アカウント不要にして対応）
+- [ ] バージョンを 1.0.3.0 で提出（`Package.appxmanifest` と `build-msix.ps1 -Version 1.0.3` を一致。
+      1.0.0=既定アイコンで却下 / 1.0.1=テストアカウント無しで却下(10.3.1) /
+      1.0.2=API キー省略可＝アカウント不要にして公開 / 1.0.3=保存クエリフォーム改善）
 - [ ] Partner Center 予約の Identity Name / Publisher を `build-msix.ps1` の引数（または CI 変数）で注入
 - [x] Store アートワーク（ロゴ各サイズ）を差し替え済み（深紅グラデーション + 白 `#`。
       テンプレートの既定画像のままだと認定で落ちる）。スクリーンショットは `screenshots/`

@@ -11,7 +11,7 @@
   <Identity
     Name="RedmineExtension"
     Publisher="CN=dbsgg"
-    Version="1.0.2.0" />
+    Version="1.0.3.0" />
   <!-- MSIX 署名時は Publisher を証明書のサブジェクトと一致させること。
        winget 配布（EXE / unpackaged）ではこの Identity は使われない。 -->
 
